@@ -94,7 +94,13 @@
         },
         error_callback: err => {
           const tipo = err && err.type;
-          if (tipo === 'popup_closed') reject(new Error('Você fechou a janela de login.'));
+          if (tipo === 'popup_closed') reject(new Error(
+            'A janela de login fechou sem autorizar.\n\n' +
+            'Se dentro dela apareceu "Access blocked" ou "Erro 403: access_denied", ' +
+            'falta liberar o seu e-mail como testador: no Google Cloud Console, ' +
+            'em Tela de consentimento OAuth › Público-alvo › Usuários de teste, ' +
+            'adicione o seu próprio endereço do Gmail e salve. ' +
+            'Depois tente de novo.'));
           else if (tipo === 'popup_failed_to_open') reject(new Error(
             'O navegador bloqueou a janela de login. Libere pop-ups para este site e tente de novo.'));
           else reject(new Error('Falha no login: ' + (err && err.message || tipo || 'desconhecida')));
