@@ -1,0 +1,59 @@
+# Roda o teste de fumaça do app a cada envio.
+#
+# Este projeto é JavaScript puro no navegador: não tem package.json,
+# npm nem etapa de build. Por isso o teste não é `npm test` — é abrir a
+# página de teste num Chrome headless e conferir o resultado.
+
+name: Teste
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fumaca:
+    name: Teste de fumaça
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      # O runner ubuntu-latest já traz o Chrome instalado. Depender só de
+      # actions oficiais do GitHub mantém a cadeia de suprimentos curta,
+      # o que importa mais que o normal num projeto de finanças.
+      - name: Conferir o Chrome
+        run: |
+          which google-chrome || which google-chrome-stable || which chromium-browser
+          google-chrome --version || google-chrome-stable --version
+
+      - name: Rodar o teste
+        run: |
+          chmod +x testar.sh
+          ./testar.sh
+
+      - name: Conferir que o service worker foi versionado
+        # Alterar arquivo do app sem incrementar VERSAO faz o navegador
+        # continuar servindo a versão antiga do cache. Esta checagem
+        # avisa antes de o problema chegar em você.
+        if: github.event_name == 'push'
+        run: |
+          ANTERIOR=$(git rev-parse HEAD~1 2>/dev/null || echo "")
+          if [ -z "$ANTERIOR" ]; then
+            echo "Primeiro commit da série; nada a comparar."
+            exit 0
+          fi
+          MUDOU_APP=$(git diff --name-only "$ANTERIOR" HEAD -- js css index.html manifest.webmanifest | wc -l)
+          MUDOU_SW=$(git diff "$ANTERIOR" HEAD -- sw.js | grep -c "^[+-]const VERSAO" || true)
+          if [ "$MUDOU_APP" -gt 0 ] && [ "$MUDOU_SW" -eq 0 ]; then
+            echo "::warning::Arquivos do app mudaram, mas VERSAO no sw.js não foi incrementada."
+            echo "Sem isso, o navegador continua servindo a versão antiga do cache."
+          else
+            echo "OK."
+          fi

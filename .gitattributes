@@ -1,0 +1,16 @@
+# Normaliza quebras de linha por tipo de arquivo.
+# Sem isto, um .sh gravado com CRLF quebra no Linux do GitHub Actions
+# com o erro "\r: command not found", e um .cmd com LF pode confundir
+# o interpretador de lote do Windows.
+
+* text=auto
+
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+*.png binary
+*.ofx text
