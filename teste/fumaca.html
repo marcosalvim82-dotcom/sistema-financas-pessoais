@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>aguardando</title>
+<link rel="stylesheet" href="../css/app.css">
+<style>body{overflow:auto;padding:1rem;font-family:var(--mono)}
+#r,#r2{padding:.5rem 0;border-bottom:1px solid var(--rule);font-size:.85rem;white-space:pre-wrap}</style>
+</head>
+<body>
+<h1 style="font-size:1rem">Teste de fumaça</h1>
+<div id="r">aguardando</div>
+<div id="r2">aguardando</div>
+<div id="app"></div>
+
+<script src="../js/util.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/rules.js"></script>
+<script src="../js/parse.js"></script>
+<script src="../js/engine.js"></script>
+<script src="../js/insights.js"></script>
+<script src="../js/charts.js"></script>
+<script src="../js/xlsx.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/views.js"></script>
+<script src="../js/views2.js"></script>
+<script src="../js/demo.js"></script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   Teste de fumaça — roda em navegador headless via ../testar.cmd
+
+   Não usa IndexedDB de propósito: sob tempo virtual o headless não
+   avança os callbacks do IndexedDB, e o teste ficaria pendurado.
+   O dataset é montado direto em memória.
+   ══════════════════════════════════════════════════════════════════ */
+(function () {
+  var falhas = [];
+  var notas = [];
+  function exigir(nome, cond) { if (!cond) falhas.push(nome); }
+
+  /* ── Bloco 1: módulos carregaram e funções puras respondem ───── */
+  exigir('U', typeof U === 'object');
+  exigir('DB', typeof DB === 'object');
+  exigir('RULES', typeof RULES === 'object');
+  exigir('PARSE', typeof PARSE === 'object');
+  exigir('ENGINE', typeof ENGINE === 'object');
+  exigir('INSIGHTS', typeof INSIGHTS === 'object');
+  exigir('CHARTS', typeof CHARTS === 'object');
+  exigir('XLSXOUT', typeof XLSXOUT === 'object');
+  exigir('UI', typeof UI === 'object');
+  exigir('views1', window.__views1 === true);
+  exigir('views2', window.__views2 === true);
+  exigir('demo', typeof UI.actions.demo === 'function');
+  exigir('9-renderizadores', Object.keys(UI.viewRenderers).length >= 9);
+
+  try {
+    exigir('dinheiro', U.money(-123456) === '−R$ 1.234,56');
+    exigir('data-br', U.parseDate('05/03/2026') === '2026-03-05');
+    exigir('data-ofx', U.parseDate('20260305') === '2026-03-05');
+    exigir('valor-br', U.parseMoney('1.234,56') === 123456);
+    exigir('valor-negativo', U.parseMoney('-1.234,56') === -123456);
+    exigir('valor-debito', U.parseMoney('45,90 D') === -4590);
+    exigir('descritor', U.normalizeDescriptor('PG *RESTAURANTE DA MARIA SP') === 'RESTAURANTE DA MARIA');
+    exigir('estabelecimento', U.merchantKey(U.merchantSource(
+      U.normalizeDescriptor('DEBITO AUTOMATICO ENEL DISTRIBUICAO SP'))) === 'ENEL DISTRIBUICAO');
+    exigir('uber-preservado', U.merchantKey(U.normalizeDescriptor('UBER *TRIP')) === 'UBER TRIP');
+    var p = ENGINE.detectInstallment('MAGAZINE PARC 03/12');
+    exigir('parcela', p && p.no === 3 && p.total === 12);
+    exigir('categorias', RULES.buildCategories().length > 100);
+    exigir('regras-semeadas', RULES.SEED_RULES.length > 80);
+    notas.push('categorias=' + RULES.buildCategories().length);
+    notas.push('regras=' + RULES.SEED_RULES.length);
+  } catch (e) { falhas.push('puras:' + e.message); }
+
+  /* ── Bloco 2: leitura de OFX e CSV ───────────────────────────── */
+  try {
+    var ofx = [
+      'OFXHEADER:100', 'DATA:OFXSGML', '',
+      '<OFX><SIGNONMSGSRSV1><SONRS><FI><ORG>Itau<FID>341</FI></SONRS></SIGNONMSGSRSV1>',
+      '<BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL',
+      '<BANKACCTFROM><BANKID>341<ACCTID>567890<ACCTTYPE>CHECKING</BANKACCTFROM>',
+      '<BANKTRANLIST><DTSTART>20260601<DTEND>20260630',
+      '<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260603<TRNAMT>-189.90<FITID>A1<MEMO>PG *DROGARIA SAO PAULO</STMTTRN>',
+      '<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260605<TRNAMT>8500.00<FITID>A2<MEMO>PAGAMENTO DE SALARIO</STMTTRN>',
+      '</BANKTRANLIST><LEDGERBAL><BALAMT>7045.30<DTASOF>20260630</LEDGERBAL>',
+      '</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>'
+    ].join('\n');
+    var o = PARSE.parseOFX(ofx, 'extrato.ofx');
+    exigir('ofx-instituicao', o.institution && o.institution.id === 'itau');
+    exigir('ofx-lancamentos', o.statements[0].records.length === 2);
+    exigir('ofx-saldo', o.statements[0].balanceCents === 704530);
+    exigir('ofx-valor', o.statements[0].records[0].amountCents === -18990);
+
+    var csv = 'Data;Histórico;Valor;Saldo\r\n' +
+      '01/06/2026;COMPRA CARTAO DEBITO CARREFOUR;-235,49;4.512,30\r\n' +
+      '02/06/2026;PIX ENVIADO JOAO M SILVA;-150,00;4.362,30\r\n';
+    var c = PARSE.parseCSV(csv, 'extrato.csv');
+    exigir('csv-lancamentos', c.statements[0].records.length === 2);
+    exigir('csv-valor', c.statements[0].records[0].amountCents === -23549);
+    exigir('csv-saldo', c.statements[0].balanceCents === 436230);
+  } catch (e) { falhas.push('leitura:' + e.message); }
+
+  /* ── Bloco 3: geração de XLSX ────────────────────────────────── */
+  try {
+    var blob = XLSXOUT.build([{ name: 'T', rows: [['a', 'b'], ['x', 1.5]] }]);
+    exigir('xlsx', blob && blob.size > 1000);
+  } catch (e) { falhas.push('xlsx:' + e.message); }
+
+  document.getElementById('r').textContent =
+    (falhas.length ? 'FALHOU [' + falhas.join(' | ') + ']' : 'OK') +
+    ' :: ' + notas.join(' ');
+
+  /* ── Bloco 4: dataset em memória e as 9 telas ────────────────── */
+  var falhasTela = [];
+  var resumoTela = '';
+  try {
+    DB.data = DB.emptyDataset();
+    DB.ready = true;
+    ENGINE.seed();
+
+    var hoje = U.today();
+    DB.data.accounts.push({
+      id: 'acc1', institutionId: 'nubank', name: 'Conta teste', type: 'checking',
+      masked: '1234', currency: 'BRL', balanceCents: 500000, balanceDate: hoje,
+      status: 'active', includeInNetWorth: true, color: '#820AD1'
+    });
+    DB.data.cards.push({
+      id: 'card1', institutionId: 'nubank', name: 'Cartão teste', masked: '4471',
+      limitCents: 1000000, closingDay: 2, dueDay: 10, paymentAccountId: 'acc1',
+      status: 'active', color: '#820AD1', cycleLocked: true
+    });
+
+    var amostras = [
+      ['PAGAMENTO DE SALARIO EMPRESA', 850000, 'acc1', 5],
+      ['DEBITO AUTOMATICO ENEL DISTRIBUICAO SP', -18900, 'acc1', 12],
+      ['PAGAMENTO BOLETO CONDOMINIO EDIFICIO', -74500, 'acc1', 10],
+      ['APLICACAO CDB LIQUIDEZ DIARIA', -150000, 'acc1', 6],
+      ['TARIFA CESTA DE SERVICOS', -3490, 'acc1', 2],
+      ['PAGAMENTO FATURA CARTAO DE CREDITO', -230000, 'acc1', 10],
+      ['IFD*IFOOD', -6480, 'card1', 14],
+      ['CARREFOUR HIPER', -23549, 'card1', 8],
+      ['UBER *TRIP', -2340, 'card1', 16],
+      ['NETFLIX.COM', -5990, 'card1', 14],
+      ['MAGAZINE LUIZA NOTEBOOK PARC 03/12', -41200, 'card1', 20],
+      ['DROGARIA SAO PAULO', -18990, 'card1', 11]
+    ];
+    for (var m = 5; m >= 0; m--) {
+      var ref = U.addMonths(hoje, -m);
+      var y = +ref.split('-')[0], mm = +ref.split('-')[1];
+      for (var i = 0; i < amostras.length; i++) {
+        var a = amostras[i];
+        var data = U.clampDay(y, mm, a[3]);
+        if (data > hoje) continue;
+        var norm = U.normalizeDescriptor(a[0]);
+        var src = U.merchantSource(norm);
+        var tx = {
+          id: 'tx' + m + '-' + i,
+          accountId: a[2] === 'acc1' ? 'acc1' : null,
+          cardId: a[2] === 'card1' ? 'card1' : null,
+          date: data, cashDate: data, amountCents: a[1],
+          descriptorRaw: a[0], descriptorNorm: norm,
+          merchantKey: U.merchantKey(src), merchantName: U.titleCase(src),
+          method: RULES.detectMethod(norm), status: 'posted',
+          isTransfer: false, tags: [], fingerprint: 'fp' + m + i,
+          importId: 'imp1', createdAt: new Date().toISOString()
+        };
+        var parc = ENGINE.detectInstallment(a[0]);
+        if (parc) { tx.installmentNo = parc.no; tx.installmentTotal = parc.total; }
+        ENGINE.applyClassification(tx, ENGINE.classify(tx, {}));
+        if (parc) ENGINE.linkInstallment(tx);
+        DB.data.transactions.push(tx);
+      }
+    }
+    DB.data.goals.push({ id: 'g1', type: 'emergency_fund', name: 'Reserva', targetCents: 3000000, targetDate: '' });
+    DB.data.investPositions.push({
+      id: 'p1', name: 'CDB', assetClass: 'renda-fixa',
+      investedCents: 1000000, currentCents: 1120000, createdAt: hoje, updatedAt: hoje
+    });
+
+    ENGINE.recomputeCardCycles();
+    ENGINE.linkTransfers();
+    ENGINE.detectRecurrences();
+    UI.applyTheme();
+    UI.render();
+
+    var telas = ['painel', 'revisar', 'transacoes', 'cartoes', 'calendario',
+      'metas', 'investimentos', 'relatorios', 'ajustes'];
+    for (var t = 0; t < telas.length; t++) {
+      try {
+        UI.state.view = telas[t];
+        UI.render();
+        if (document.querySelector('#viewRoot').innerHTML.indexOf('Algo quebrou') > -1) {
+          falhasTela.push(telas[t]);
+        }
+      } catch (e) { falhasTela.push(telas[t] + ':' + e.message); }
+    }
+
+    var total = DB.data.transactions.length;
+    var fila = ENGINE.reviewQueue().length;
+    var cartao = ENGINE.cardSummary(DB.data.cards[0]);
+    resumoTela = 'telas=9 lancamentos=' + total +
+      ' auto=' + ((total - fila) / total * 100).toFixed(0) + '%' +
+      ' recorrencias=' + DB.data.recurrences.length +
+      ' parcelamentos=' + DB.data.installmentPlans.length +
+      ' faturaAberta=' + U.money(cartao.openCents) +
+      ' limiteDisp=' + U.money(cartao.availableCents) +
+      ' insights=' + INSIGHTS.all().length;
+
+    // Nenhuma correção manual pode ter sido perdida (regra inviolável 2).
+    var manuais = DB.data.transactions.filter(function (x) { return x.categorySource === 'user'; });
+    ENGINE.reclassifyAll(false);
+    var manuaisDepois = DB.data.transactions.filter(function (x) { return x.categorySource === 'user'; });
+    if (manuais.length !== manuaisDepois.length) falhasTela.push('reclassify-apagou-manual');
+  } catch (e) {
+    falhasTela.push('boot:' + e.message);
+  }
+
+  var linha2 = (falhasTela.length ? 'FALHOU [' + falhasTela.join(' | ') + ']' : 'OK') +
+    ' :: ' + resumoTela;
+  document.getElementById('r2').textContent = linha2;
+
+  document.title = document.getElementById('r').textContent + ' /// ' + linha2;
+})();
+</script>
+</body>
+</html>

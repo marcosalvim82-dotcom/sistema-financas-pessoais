@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Finanças — controle pessoal</title>
+<meta name="description" content="Controle financeiro pessoal com importação automática de extratos e faturas. Os dados ficam no seu dispositivo.">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23A87B2E'/><path d='M9 22V10h9M9 16h7' stroke='%23fff' stroke-width='2.6' fill='none' stroke-linecap='round'/></svg>">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-180.png">
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F4F4F2">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12151A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Finanças">
+
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="app">
+  <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;height:100vh;color:#7C8089;font-family:system-ui">
+    Carregando…
+  </div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/store.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/parse.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/insights.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/xlsx.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/views.js"></script>
+<script src="js/views2.js"></script>
+<script src="js/demo.js"></script>
+
+<script>
+/* ── Inicialização ─────────────────────────────────────────────── */
+(async function boot() {
+  const app = document.getElementById('app');
+  try {
+    await DB.load();
+  } catch (e) {
+    app.innerHTML = '<div style="padding:2rem;font-family:system-ui;max-width:44rem;margin:auto">' +
+      '<h1>Não consegui abrir o armazenamento local</h1>' +
+      '<p>' + String(e && e.message || e) + '</p>' +
+      '<p>Tente abrir este arquivo no <b>Firefox</b>, que permite banco de dados local em arquivos abertos ' +
+      'do disco. Nada é enviado para a internet em nenhum dos casos.</p></div>';
+    return;
+  }
+
+  ENGINE.seed();
+  UI.applyTheme();
+  UI.render();
+
+  // Aviso quando o armazenamento caiu para localStorage (limite ~5 MB).
+  if (!DB._idb) {
+    const info = DB.sizeInfo();
+    if (info.mb > 3) {
+      UI.toast('Atenção: o armazenamento deste navegador está perto do limite. ' +
+        'Baixe um backup em Ajustes e considere abrir o arquivo no Firefox.', 'bad');
+    }
+  }
+
+  // Grava antes de fechar a aba.
+  window.addEventListener('beforeunload', () => { DB.flush(); });
+
+  // Atalhos
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input,textarea,select')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      UI.go('transacoes');
+      setTimeout(() => { const q = document.querySelector('#fq'); if (q) q.focus(); }, 60);
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const map = { '1': 'painel', '2': 'revisar', '3': 'transacoes', '4': 'cartoes', '5': 'calendario', '6': 'metas', '7': 'investimentos', '8': 'relatorios', '9': 'ajustes' };
+    if (map[e.key]) { UI.go(map[e.key]); return; }
+    if (e.key === 'i' || e.key === 'I') UI.actions.import();
+  });
+
+  /* ── Atalhos do sistema operacional (ícone longo-pressionado) ─── */
+  const params = new URLSearchParams(location.search);
+  if (params.get('tela')) UI.go(params.get('tela'));
+  if (params.get('acao') === 'importar') setTimeout(() => UI.actions.import(), 200);
+
+  /* ── Service worker: abre offline e avisa quando há versão nova ── */
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    try {
+      const reg = await navigator.serviceWorker.register('sw.js');
+
+      const avisarAtualizacao = worker => {
+        UI.toast('Nova versão disponível. ' +
+          '<button class="btn sm primary" id="btnAtualizar">Atualizar agora</button>',
+          '', { persist: true });
+        const btn = document.getElementById('btnAtualizar');
+        if (btn) btn.onclick = () => {
+          worker.postMessage({ tipo: 'ASSUMIR_AGORA' });
+        };
+      };
+
+      if (reg.waiting && navigator.serviceWorker.controller) avisarAtualizacao(reg.waiting);
+
+      reg.addEventListener('updatefound', () => {
+        const novo = reg.installing;
+        if (!novo) return;
+        novo.addEventListener('statechange', () => {
+          // Só é "atualização" se já havia uma versão controlando a página.
+          if (novo.state === 'installed' && navigator.serviceWorker.controller) {
+            avisarAtualizacao(novo);
+          }
+        });
+      });
+
+      let recarregando = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (recarregando) return;
+        recarregando = true;
+        location.reload();
+      });
+    } catch (e) {
+      console.warn('Service worker não registrado:', e);
+    }
+  }
+
+  /* ── Convite para instalar na tela inicial ─────────────────────── */
+  let promptInstalar = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    promptInstalar = e;
+    if (DB.data.settings.instalacaoDispensada) return;
+    setTimeout(() => {
+      UI.toast('Dá para instalar como aplicativo, com ícone na tela inicial. ' +
+        '<button class="btn sm primary" id="btnInstalar">Instalar</button> ' +
+        '<button class="btn sm ghost" id="btnNaoInstalar">Agora não</button>',
+        '', { persist: true });
+      const bi = document.getElementById('btnInstalar');
+      const bn = document.getElementById('btnNaoInstalar');
+      if (bi) bi.onclick = async () => {
+        const p = promptInstalar; promptInstalar = null;
+        const t = document.querySelector('.toast'); if (t) t.remove();
+        if (p) { p.prompt(); await p.userChoice; }
+      };
+      if (bn) bn.onclick = () => {
+        DB.data.settings.instalacaoDispensada = true;
+        DB.save();
+        const t = document.querySelector('.toast'); if (t) t.remove();
+      };
+    }, 4000);
+  });
+
+  window.addEventListener('appinstalled', () => {
+    UI.toast('Instalado. Agora ele abre pelo ícone, como qualquer aplicativo.', 'good');
+  });
+
+  // Lembrete de backup a cada 30 dias.
+  const s = DB.data.settings;
+  if (DB.data.transactions.length > 50) {
+    const last = s.lastBackup;
+    if (!last || U.daysBetween(last, U.today()) > 30) {
+      setTimeout(() => {
+        UI.toast('Faz mais de um mês que você não baixa um backup. ' +
+          '<button class="btn sm primary" data-act="backup">Baixar agora</button>', '',
+          { persist: true });
+      }, 2500);
+    }
+  }
+})();
+</script>
+</body>
+</html>

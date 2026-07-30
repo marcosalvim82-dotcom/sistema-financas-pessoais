@@ -1,0 +1,17 @@
+# Backups exportados pelo app (contêm seus lançamentos reais).
+# Nunca devem entrar no repositório.
+financas-backup-*.json
+lancamentos-*.csv
+relatorio-financeiro-*.xlsx
+
+# Preferências pessoais do Claude Code neste projeto
+.claude/settings.local.json
+
+# Lixo do sistema e do editor
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
