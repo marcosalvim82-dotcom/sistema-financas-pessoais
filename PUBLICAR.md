@@ -27,14 +27,25 @@ O repositório já está apontado para:
 
 ### Passo 1 — primeiro envio (uma vez só)
 
-No terminal, dentro da pasta do projeto:
+**Dê duplo clique em `publicar.cmd`.**
+
+Ele mostra o que ainda não foi publicado, roda o teste de fumaça, pergunta se você
+confirma e só então envia. Se o teste falhar, ele se recusa a publicar.
+
+No primeiro uso vai abrir uma janela do GitHub pedindo login. Autorize e volte.
+A credencial fica salva pelo Git Credential Manager; os próximos envios não pedem nada.
+
+<details>
+<summary>Prefere fazer pelo terminal?</summary>
+
+Abra o Explorador de Arquivos na pasta `C:\Users\marco\Financas`, clique na barra
+de endereço, apague o caminho, escreva `cmd` e aperte Enter. Abre um terminal já
+dentro da pasta. Aí:
 
 ```bash
 git push -u origin main
 ```
-
-Vai abrir uma janela do navegador pedindo login no GitHub. Autorize.
-A credencial fica salva pelo Git Credential Manager; os próximos envios não pedem nada.
+</details>
 
 ### Passo 2 — conectar a Cloudflare (uma vez só)
 
