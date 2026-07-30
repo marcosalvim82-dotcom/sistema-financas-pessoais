@@ -49,9 +49,44 @@ if errorlevel 1 (
   echo Autorize e volte para esta janela.
   echo.
   git push -u origin main
-) else (
-  git push
+  goto :fim
 )
+
+rem Se alguem mexeu no repositorio pelo site do GitHub, o envio seria
+rem recusado. Traz o que houver de novo antes de tentar.
+echo Conferindo se ha novidade no GitHub...
+git fetch origin
+git rev-list --count HEAD..origin/main > "%TEMP%\fin_atras.txt" 2>nul
+set /p ATRAS=<"%TEMP%\fin_atras.txt"
+del "%TEMP%\fin_atras.txt" >nul 2>&1
+
+if not "%ATRAS%"=="0" (
+  echo.
+  echo O GitHub tem %ATRAS% alteracao^(oes^) que voce ainda nao tem.
+  echo Integrando antes de enviar...
+  git pull --rebase origin main
+  if errorlevel 1 (
+    echo.
+    echo Nao consegui integrar automaticamente - ha conflito.
+    echo Peca ajuda ao Claude antes de continuar. Nada foi enviado.
+    echo.
+    pause
+    exit /b 1
+  )
+  echo Integrado. Rodando o teste de novo por seguranca...
+  call "%~dp0testar.cmd"
+  if errorlevel 1 (
+    echo.
+    echo Depois de integrar, o teste FALHOU. Nao vou publicar.
+    echo.
+    pause
+    exit /b 1
+  )
+)
+
+git push
+
+:fim
 
 if errorlevel 1 (
   echo.
