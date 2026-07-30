@@ -17,30 +17,65 @@ O que você **não** ganha:
 
 ---
 
-## Passo a passo — Cloudflare Pages (recomendado)
+## Configuração — Cloudflare Pages conectado ao GitHub
 
 Banda ilimitada no plano gratuito, HTTPS automático, sem cartão de crédito.
+Depois de configurado, **todo `git push` publica sozinho** em cerca de 30 segundos.
 
-1. Crie uma conta em **dash.cloudflare.com** (grátis).
-2. No menu lateral: **Workers & Pages** → **Create** → aba **Pages** →
-   **Upload assets**.
-3. Dê um nome ao projeto (ex.: `financas`). Ele vira `financas.pages.dev`.
-4. **Arraste a pasta `Financas` inteira** para a área de upload. Suba tudo:
-   `index.html`, `sw.js`, `manifest.webmanifest`, `_headers`, e as pastas
-   `css`, `js` e `icons`.
-5. Clique em **Deploy**. Em cerca de 20 segundos o endereço está no ar.
+O repositório já está apontado para:
+`https://github.com/marcosalvim82-dotcom/sistema-financas-pessoais`
 
-Pronto. Abra o endereço no celular e o navegador vai oferecer instalar o app.
+### Passo 1 — primeiro envio (uma vez só)
 
-> **Importante:** o arquivo `_headers` precisa estar na raiz do upload.
-> É ele que aplica a política de segurança e faz o `sw.js` nunca ficar preso em cache.
+No terminal, dentro da pasta do projeto:
 
-### Publicando uma versão nova
+```bash
+git push -u origin main
+```
 
-Repita o upload (**Create new deployment**) e, antes, **mude a linha
-`const VERSAO = 'v1.0.0';` no início do `sw.js`** — por exemplo para `v1.0.1`.
-Sem isso, o navegador continua servindo o app antigo do cache.
-Quem estiver com o app aberto recebe o aviso *"Nova versão disponível"*.
+Vai abrir uma janela do navegador pedindo login no GitHub. Autorize.
+A credencial fica salva pelo Git Credential Manager; os próximos envios não pedem nada.
+
+### Passo 2 — conectar a Cloudflare (uma vez só)
+
+1. Entre em **dash.cloudflare.com** (conta gratuita).
+2. **Workers & Pages** → **Create** → aba **Pages** → **Connect to Git**.
+3. Autorize o acesso da Cloudflare ao GitHub e escolha o repositório
+   `sistema-financas-pessoais`.
+4. Nas configurações de build:
+   - **Framework preset:** `None`
+   - **Build command:** deixe **vazio**
+   - **Build output directory:** `/`
+
+   É um site estático puro; não existe etapa de build.
+5. **Save and Deploy.**
+
+O endereço fica `sistema-financas-pessoais.pages.dev` (ou o nome que você escolher).
+
+> O arquivo `_headers` precisa continuar na raiz. É ele que aplica a política de
+> segurança, marca o site como `noindex` e impede o `sw.js` de ficar preso em cache.
+
+### Depois disso: publicar é só empurrar
+
+```bash
+git push
+```
+
+A Cloudflare detecta o commit e publica. Você acompanha em *Deployments*.
+
+Se algo sair errado, dá para voltar: em *Deployments*, qualquer versão anterior
+tem a opção **Rollback to this deployment**. O histórico do git dá a mesma
+garantia do lado do código.
+
+### A regra que não pode ser esquecida
+
+**Toda alteração nos arquivos do app exige incrementar `const VERSAO` no topo do
+`sw.js`** (`v1.0.0` → `v1.0.1`). Sem isso o navegador continua servindo a versão
+antiga do cache e parece que a mudança não funcionou. Quem estiver com o app
+aberto recebe o aviso *"Nova versão disponível"*.
+
+Isso está registrado no `CLAUDE.md`, então o Claude faz automaticamente a cada
+alteração que peça publicação.
 
 ---
 

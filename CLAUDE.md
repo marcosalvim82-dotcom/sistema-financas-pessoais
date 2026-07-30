@@ -26,6 +26,23 @@ entre colchetes.
 Não existe suíte de teste unitário. O teste de fumaça é a rede de segurança — rode
 sempre antes de dizer que terminou.
 
+## Publicar
+
+O site é servido pela Cloudflare Pages conectada ao repositório
+`marcosalvim82-dotcom/sistema-financas-pessoais`. **Todo push na branch `main`
+publica automaticamente.**
+
+Por isso, ao terminar qualquer alteração nos arquivos do app:
+
+1. **Incremente `const VERSAO` no topo do `sw.js`** (`v1.0.0` → `v1.0.1`).
+   Sem isso o service worker serve a versão antiga do cache e a alteração parece
+   não ter funcionado. Esta é a causa número um de "mudou nada".
+2. Rode `./testar.cmd`.
+3. Faça o commit.
+4. **Não faça `git push`** — está bloqueado no `.claude/settings.json` de propósito,
+   porque publicar é ação que sai da máquina. Deixe o commit pronto e avise que
+   basta `git push` para ir ao ar.
+
 ---
 
 ## Regras invioláveis
