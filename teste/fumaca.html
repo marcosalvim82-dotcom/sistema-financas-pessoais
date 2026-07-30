@@ -229,6 +229,28 @@
     else if (modal.innerHTML.indexOf('https') < 0) falhasTela.push('gmail-aviso-sem-explicacao');
     UI.closeModal();
 
+    // No celular o menu lateral some; o "Mais" precisa dar acesso a
+    // tudo que ficou de fora, senão metade do app fica inalcançável.
+    UI.state.view = 'painel';
+    UI.render();
+    if (!document.querySelector('.mobilebar [data-act=mais]')) falhasTela.push('mobile-sem-botao-mais');
+    UI.actions.mais();
+    var sheet = document.querySelector('.scrim .modal');
+    if (!sheet) falhasTela.push('mais-nao-abriu');
+    else {
+      ['calendario', 'metas', 'investimentos', 'relatorios', 'ajustes'].forEach(function (v) {
+        if (!sheet.querySelector('[data-nav=' + v + ']')) falhasTela.push('mais-sem-' + v);
+      });
+      ['import', 'gmail', 'backup', 'theme'].forEach(function (a) {
+        if (!sheet.querySelector('[data-act=' + a + ']')) falhasTela.push('mais-sem-acao-' + a);
+      });
+    }
+    UI.closeModal();
+
+    // E o Gmail precisa estar alcançável já no painel, sem caçar em menu.
+    UI.render();
+    if (!document.querySelector('#viewRoot [data-act=gmail]')) falhasTela.push('painel-sem-botao-gmail');
+
     var total = DB.data.transactions.length;
     var fila = ENGINE.reviewQueue().length;
     var cartao = ENGINE.cardSummary(DB.data.cards[0]);

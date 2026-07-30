@@ -30,7 +30,11 @@
     { id: 'relatorios', ico: '▤', label: 'Relatórios' },
     { id: 'ajustes', ico: '⚙', label: 'Ajustes' }
   ];
-  const MOBILE_VIEWS = ['painel', 'revisar', 'transacoes', 'cartoes', 'calendario'];
+  // A barra do celular cabe em 5 itens. O que sobra vai para o "Mais",
+  // senão metade do app fica inalcançável no telefone — o menu lateral
+  // some abaixo de 900px.
+  const MOBILE_VIEWS = ['painel', 'revisar', 'transacoes', 'cartoes'];
+  const MOBILE_EXTRA = ['calendario', 'metas', 'investimentos', 'relatorios', 'ajustes'];
 
   /* ═══════════════════════ Infraestrutura ══════════════════════ */
 
@@ -136,6 +140,8 @@
           '<span class="ico">' + v.ico + '</span>' + v.label +
           (v.id === 'revisar' && pend ? '<span class="badge">' + pend + '</span>' : '') + '</button>';
       }).join('') +
+      '<button data-act="mais" class="' + (MOBILE_EXTRA.includes(UI.state.view) ? 'on' : '') + '">' +
+      '<span class="ico">⋯</span>Mais</button>' +
       '</div>';
 
     const root = $('#viewRoot');
@@ -309,6 +315,46 @@
     d().settings.lastBackup = U.today();
     DB.save();
     UI.toast('Backup salvo na pasta de downloads.', 'good');
+  };
+
+  // Tudo o que não coube na barra do celular.
+  UI.actions.mais = function () {
+    const item = (icone, texto, attr, detalhe) =>
+      '<button class="btn ghost" ' + attr + ' style="justify-content:flex-start;gap:.6rem;' +
+      'padding:.6rem .5rem;width:100%;border-bottom:1px solid var(--rule-soft);border-radius:0">' +
+      '<span style="width:1.4rem;text-align:center;font-size:1rem">' + icone + '</span>' +
+      '<span style="display:flex;flex-direction:column;gap:.05rem;min-width:0">' +
+      '<span style="font-size:.92rem;color:var(--ink)">' + texto + '</span>' +
+      (detalhe ? '<span style="font-size:.72rem;color:var(--ink-3)">' + detalhe + '</span>' : '') +
+      '</span></button>';
+
+    UI.modal('<h2>Mais</h2>' +
+      '<div style="display:flex;flex-direction:column;margin:-.3rem 0 .6rem">' +
+      MOBILE_EXTRA.map(id => {
+        const v = VIEWS.find(x => x.id === id);
+        return item(v.ico, v.label, 'data-nav="' + v.id + '"');
+      }).join('') +
+      '</div>' +
+      '<div class="lbl">importar</div>' +
+      '<div style="display:flex;flex-direction:column;margin-bottom:.6rem">' +
+      item('＋', 'Importar extrato', 'data-act="import"', 'arquivo OFX, CSV ou XLSX') +
+      item('✉', 'Buscar no Gmail', 'data-act="gmail"', 'procura extratos e faturas no seu e-mail') +
+      '</div>' +
+      '<div class="lbl">sistema</div>' +
+      '<div style="display:flex;flex-direction:column">' +
+      item('↓', 'Baixar backup', 'data-act="backup"', 'guarde este arquivo em lugar seguro') +
+      item('◐', 'Trocar tema', 'data-act="theme"', 'claro, escuro ou automático') +
+      '</div>' +
+      '<div class="modal-foot"><button class="btn" data-x="c">Fechar</button></div>',
+      {
+        onMount(m) {
+          m.querySelector('[data-x=c]').onclick = UI.closeModal;
+          // Fecha antes de agir, senão a tela nova nasce atrás do modal.
+          m.querySelectorAll('[data-nav],[data-act]').forEach(b => {
+            b.addEventListener('click', () => setTimeout(UI.closeModal, 0));
+          });
+        }
+      });
   };
 
   UI.actions.theme = function () {

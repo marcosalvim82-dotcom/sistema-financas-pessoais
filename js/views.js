@@ -64,6 +64,7 @@
     const pend = ENGINE.reviewQueue().length;
 
     let html = head('Painel', U.fmtMonth(mk, true) + ' · atualizado em ' + U.fmtDate(today),
+      '<button class="btn" data-act="gmail">✉ Gmail</button>' +
       '<button class="btn primary" data-act="import">＋ Importar extrato</button>');
 
     if (pend) {

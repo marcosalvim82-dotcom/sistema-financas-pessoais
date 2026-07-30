@@ -10,7 +10,7 @@
    o aviso de atualização.
    ══════════════════════════════════════════════════════════════════ */
 
-const VERSAO = 'v1.1.0';
+const VERSAO = 'v1.2.0';
 const CACHE = 'financas-' + VERSAO;
 
 const ARQUIVOS = [
