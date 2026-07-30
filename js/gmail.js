@@ -60,9 +60,21 @@
     });
   }
 
-  G.conectar = async function () {
+  // A origem exata que precisa estar cadastrada no Google Cloud, em
+  // Credenciais › ID do cliente OAuth › Origens JavaScript autorizadas.
+  G.origem = function () {
+    return location.origin;
+  };
+
+  // opts.silencioso: tenta renovar sem interromper, usado quando o token
+  // expira no meio da sessão. Na autorização explícita é preciso pedir
+  // consentimento — sem isso o Google fecha o pop-up sem devolver nada,
+  // porque não existe consentimento anterior para reaproveitar.
+  G.conectar = async function (opts) {
+    opts = opts || {};
     if (!G.disponivel()) {
-      throw new Error('O login do Google exige um endereço https://. ' +
+      throw new Error('O login do Google exige um endereço https://.\n\n' +
+        'Você está em "' + location.origin + '". ' +
         'Abra o app pelo site publicado, não pelo arquivo local.');
     }
     const clientId = String((DB.data.settings || {}).gmailClientId || '').trim();
@@ -85,6 +97,12 @@
             token = resp.access_token;
             // Guarda margem de 5 minutos antes do vencimento real.
             tokenExpiraEm = Date.now() + ((resp.expires_in || 3600) - 300) * 1000;
+            // Registra que já houve consentimento neste navegador: a
+            // partir daqui a renovação pode ser silenciosa.
+            if (!DB.data.settings.gmailJaAutorizou) {
+              DB.data.settings.gmailJaAutorizou = true;
+              DB.save();
+            }
             resolve(token);
           } else {
             reject(new Error('O Google não devolveu autorização. ' +
@@ -95,18 +113,21 @@
         error_callback: err => {
           const tipo = err && err.type;
           if (tipo === 'popup_closed') reject(new Error(
-            'A janela de login fechou sem autorizar.\n\n' +
-            'Se dentro dela apareceu "Access blocked" ou "Erro 403: access_denied", ' +
-            'falta liberar o seu e-mail como testador: no Google Cloud Console, ' +
-            'em Tela de consentimento OAuth › Público-alvo › Usuários de teste, ' +
-            'adicione o seu próprio endereço do Gmail e salve. ' +
-            'Depois tente de novo.'));
+            'A janela do Google fechou sem autorizar. As três causas possíveis:\n\n' +
+            '1. Apareceu "Erro 403: access_denied" — falta adicionar o seu e-mail em ' +
+            'Tela de consentimento OAuth › Público-alvo › Usuários de teste.\n\n' +
+            '2. Apareceu erro de origem — em Credenciais › ID do cliente OAuth › ' +
+            'Origens JavaScript autorizadas precisa constar exatamente:\n' +
+            G.origem() + '\n\n' +
+            '3. Você fechou a janela sem querer. Nesse caso é só tentar de novo.'));
           else if (tipo === 'popup_failed_to_open') reject(new Error(
             'O navegador bloqueou a janela de login. Libere pop-ups para este site e tente de novo.'));
           else reject(new Error('Falha no login: ' + (err && err.message || tipo || 'desconhecida')));
         }
       });
-      tokenClient.requestAccessToken({ prompt: '' });
+      // 'consent' força a tela de autorização. Sem isso, na primeira vez
+      // o Google fecha o pop-up sem devolver token.
+      tokenClient.requestAccessToken({ prompt: opts.silencioso ? '' : 'consent' });
     });
   };
 
@@ -121,7 +142,16 @@
   /* ═══════════════════════ Chamadas à API ══════════════════════ */
 
   async function api(caminho, params) {
-    if (!G.conectado()) await G.conectar();
+    if (!G.conectado()) {
+      // Só tenta renovar em silêncio se já houve consentimento antes;
+      // na primeira vez o silêncio falha e confunde.
+      if (DB.data.settings.gmailJaAutorizou) {
+        try { await G.conectar({ silencioso: true }); }
+        catch (e) { await G.conectar(); }
+      } else {
+        await G.conectar();
+      }
+    }
     const url = new URL(API + caminho);
     if (params) for (const k in params) {
       if (params[k] !== undefined && params[k] !== null) url.searchParams.set(k, params[k]);
