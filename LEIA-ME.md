@@ -34,6 +34,29 @@ Uma vez por mês (ou por semana, se preferir):
 Só isso. O resto — categorizar, detectar cartão e conta, achar parcelas,
 reconhecer contas fixas, projetar o saldo, calcular metas — é automático.
 
+### Ou busque direto no Gmail
+
+Se o seu banco manda extrato ou fatura por e-mail, o botão **✉ Buscar no Gmail**
+procura sozinho: varre os e-mails com anexo enviados por 33 remetentes de
+instituições financeiras (ou com assunto de fatura, extrato, demonstrativo),
+lista o que achou e você marca o que quer importar.
+
+Três coisas importantes:
+
+- **Só funciona no site publicado**, não no arquivo local. O login do Google exige
+  endereço `https://`.
+- **Anexo em PDF ainda não é lido.** A busca mostra o e-mail e avisa, mas não
+  processa — e a maioria das faturas de cartão vem em PDF. Na prática essa busca
+  rende mais para extrato de conta em OFX/CSV.
+- **Exige uma credencial sua do Google**, criada uma única vez e gratuita. O app
+  te guia pelas cinco etapas na primeira vez que você clica no botão. É assim
+  porque o Google não permite que um app acesse sua conta sem uma credencial
+  vinculada a alguém — e ela fica na sua conta, não na minha.
+
+O acesso concedido é **somente leitura**, e a autorização vive apenas na memória
+da aba: ao fechar o app, ela desaparece. Nenhum e-mail é armazenado; o Gmail só
+entrega o arquivo e o processamento continua todo no seu navegador.
+
 ### Onde baixar cada arquivo
 
 | Banco | Conta corrente | Fatura do cartão |
@@ -145,6 +168,7 @@ js/xlsx.js         gerador de planilha Excel
 js/ui.js           navegação, importação, modais
 js/views.js        Painel, Revisar, Lançamentos
 js/views2.js       Cartões, Calendário, Metas, Investimentos, Relatórios, Ajustes
+js/gmail.js        busca de extratos e faturas no Gmail (opcional)
 js/demo.js         dados fictícios de demonstração
 ```
 

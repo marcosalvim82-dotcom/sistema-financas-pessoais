@@ -216,6 +216,11 @@
       '<span class="muted" style="font-size:.78rem;max-width:46ch">Eu detecto o banco, crio a conta ou o cartão, ' +
       'evito lançamentos repetidos e classifico tudo sozinho. Você só confirma o que ficar em dúvida.</span>' +
       '</div>' +
+      '<div class="card"><h3>Ou busque direto no seu Gmail</h3>' +
+      '<div class="muted" style="font-size:.84rem">Se o seu banco manda extrato ou fatura por e-mail, ' +
+      'eu procuro sozinho pelos remetentes das instituições e você escolhe o que importar — ' +
+      'sem precisar baixar arquivo nenhum.</div>' +
+      '<div class="row"><button class="btn" data-act="gmail">✉ Buscar no Gmail</button></div></div>' +
       '<div class="card"><h3>Onde baixar cada arquivo</h3>' +
       '<div class="scrollx"><table class="tbl">' +
       '<thead><tr><th>Banco</th><th>Conta corrente</th><th>Fatura do cartão</th></tr></thead><tbody>' +

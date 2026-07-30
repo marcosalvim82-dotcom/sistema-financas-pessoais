@@ -26,6 +26,20 @@ entre colchetes.
 Não existe suíte de teste unitário. O teste de fumaça é a rede de segurança — rode
 sempre antes de dizer que terminou.
 
+## Gmail (js/gmail.js)
+
+Único módulo que fala com a rede. Tudo o mais é offline por princípio.
+
+- OAuth implícito via Google Identity Services, escopo `gmail.readonly`.
+  O token fica **só em variável de módulo** — nunca em `DB.data`, nunca no disco.
+  Só o Client ID é persistido, em `settings.gmailClientId`.
+- Exige `https://`. Em `file://` o módulo detecta e explica em vez de falhar.
+- Ao mexer nos domínios do Google usados, **atualize a CSP no `_headers`** —
+  ela bloqueia externo por padrão e é o que quebra primeiro.
+- Anexo baixado vira `File` e entra em `UI.handleFiles`, o mesmo caminho do
+  arrastar-e-soltar. Não existe caminho de importação paralelo.
+- PDF entra na busca só para ser listado; `PARSE.parseFile` recusa com explicação.
+
 ## Publicar
 
 O site é servido pela Cloudflare Pages conectada ao repositório

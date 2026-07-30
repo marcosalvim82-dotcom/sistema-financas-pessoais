@@ -10,7 +10,7 @@
    o aviso de atualização.
    ══════════════════════════════════════════════════════════════════ */
 
-const VERSAO = 'v1.0.0';
+const VERSAO = 'v1.1.0';
 const CACHE = 'financas-' + VERSAO;
 
 const ARQUIVOS = [
@@ -29,6 +29,7 @@ const ARQUIVOS = [
   './js/ui.js',
   './js/views.js',
   './js/views2.js',
+  './js/gmail.js',
   './js/demo.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

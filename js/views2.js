@@ -896,6 +896,23 @@
         : '') +
       '</div>';
 
+    html += '<div class="card"><h3>Gmail</h3>' +
+      '<div class="muted" style="font-size:.82rem">Busca extratos e faturas nos e-mails das instituições ' +
+      'financeiras. O acesso é só de leitura e a autorização vive apenas na memória da aba — ' +
+      'fechando o app, ela some. Nenhum e-mail é guardado.</div>' +
+      (GMAIL.disponivel()
+        ? (GMAIL.configurado()
+          ? '<div class="note good">Credencial configurada. ' +
+          (GMAIL.conectado() ? 'Conectado agora.' : 'Vai pedir autorização na próxima busca.') + '</div>'
+          : '<div class="note warn">Falta o ID do cliente OAuth do Google. ' +
+          'Sem ele o Google não deixa nenhum app acessar a sua conta.</div>')
+        : '<div class="note warn">Indisponível no modo arquivo local: o login do Google exige ' +
+        'endereço <code>https://</code>. Funciona pelo site publicado.</div>') +
+      '<div class="row">' +
+      '<button class="btn primary" data-act="gmail">✉ Abrir busca no Gmail</button>' +
+      (GMAIL.configurado() ? '<button class="btn danger" data-act="gmailreset">Remover credencial</button>' : '') +
+      '</div></div>';
+
     html += '<div class="card"><h3>Backup e dados</h3>' +
       '<div class="note ' + (info.pesado ? 'warn' : '') + '"><b>' +
       info.transactions.toLocaleString('pt-BR') + ' lançamentos · ' + info.mb.toFixed(1) + ' MB.</b> ' +
@@ -1032,6 +1049,18 @@
     d().categories = d().categories.filter(c => c.id !== id);
     DB.save(); UI.render();
   };
+  UI.actions.gmailreset = function () {
+    UI.confirm('Remover credencial do Gmail?',
+      'A busca por e-mail para de funcionar até você configurar de novo. ' +
+      'Nada mais é afetado — seus lançamentos ficam intactos.',
+      () => {
+        GMAIL.desconectar();
+        delete d().settings.gmailClientId;
+        DB.save(); UI.render();
+        UI.toast('Credencial removida.');
+      }, 'Remover');
+  };
+
   UI.actions.wipe = function () {
     UI.confirm('Apagar absolutamente tudo?',
       'Todos os lançamentos, contas, cartões, regras e metas serão apagados deste navegador. ' +

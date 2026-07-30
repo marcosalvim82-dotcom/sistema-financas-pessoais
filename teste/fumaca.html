@@ -24,6 +24,7 @@
 <script src="../js/ui.js"></script>
 <script src="../js/views.js"></script>
 <script src="../js/views2.js"></script>
+<script src="../js/gmail.js"></script>
 <script src="../js/demo.js"></script>
 
 <script>
@@ -53,6 +54,23 @@
   exigir('views2', window.__views2 === true);
   exigir('demo', typeof UI.actions.demo === 'function');
   exigir('9-renderizadores', Object.keys(UI.viewRenderers).length >= 9);
+  exigir('GMAIL', typeof GMAIL === 'object');
+  exigir('gmail-acao', typeof UI.actions.gmail === 'function');
+
+  /* ── Gmail: consulta e decodificação, sem tocar na rede ──────── */
+  try {
+    var q = GMAIL.montarConsulta({ meses: 6 });
+    exigir('gmail-consulta-anexo', q.indexOf('has:attachment') >= 0);
+    exigir('gmail-consulta-periodo', q.indexOf('newer_than:6m') >= 0);
+    exigir('gmail-consulta-remetente', q.indexOf('from:nubank.com.br') >= 0);
+    exigir('gmail-consulta-assunto', q.indexOf('subject:(fatura)') >= 0);
+    exigir('gmail-consulta-lixeira', q.indexOf('-in:trash') >= 0);
+    exigir('gmail-sem-credencial', GMAIL.configurado() === false);
+    exigir('gmail-desconectado', GMAIL.conectado() === false);
+    exigir('gmail-extensoes', RULES.EMAIL_EXTENSIONS.indexOf('ofx') >= 0 &&
+      RULES.EMAIL_EXTENSIONS.indexOf('csv') >= 0);
+    exigir('gmail-remetentes', RULES.EMAIL_SENDERS.length >= 30);
+  } catch (e) { falhas.push('GMAIL-EXCECAO:' + e.message); }
 
   try {
     exigir('dinheiro', U.money(-123456) === '−R$ 1.234,56');
@@ -195,6 +213,21 @@
         }
       } catch (e) { falhasTela.push(telas[t] + ':' + e.message); }
     }
+
+    // Gmail: o cartão aparece em Ajustes e, sem https, avisa em vez de
+    // tentar autenticar (aqui o harness roda em file://).
+    UI.state.view = 'ajustes';
+    UI.render();
+    var htmlAjustes = document.querySelector('#viewRoot').innerHTML;
+    if (htmlAjustes.indexOf('>Gmail<') < 0) falhasTela.push('ajustes-sem-cartao-gmail');
+    if (htmlAjustes.indexOf('Indispon') < 0) falhasTela.push('ajustes-nao-avisa-file-local');
+    if (!document.querySelector('nav [data-act=gmail]')) falhasTela.push('menu-sem-botao-gmail');
+
+    UI.actions.gmail();
+    var modal = document.querySelector('.scrim .modal');
+    if (!modal) falhasTela.push('gmail-nao-abriu-aviso');
+    else if (modal.innerHTML.indexOf('https') < 0) falhasTela.push('gmail-aviso-sem-explicacao');
+    UI.closeModal();
 
     var total = DB.data.transactions.length;
     var fila = ENGINE.reviewQueue().length;

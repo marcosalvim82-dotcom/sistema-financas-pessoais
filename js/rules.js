@@ -359,6 +359,32 @@
     { id: 'outro', name: 'Outra instituição', compe: [], color: '#7C8089', hints: [] }
   ];
 
+  /* ── Remetentes de e-mail das instituições ───────────────────── */
+  // Usado para montar a busca no Gmail. Domínios, não endereços: os
+  // bancos disparam de subdomínios que mudam sem aviso
+  // (mensagem@, comunicado@, no-reply@, nao-responda@…).
+  R.EMAIL_SENDERS = [
+    'nubank.com.br', 'itau.com.br', 'itau-unibanco.com.br', 'bradesco.com.br',
+    'bb.com.br', 'santander.com.br', 'caixa.gov.br', 'bancointer.com.br',
+    'inter.co', 'c6bank.com.br', 'btgpactual.com', 'xpi.com.br',
+    'picpay.com', 'mercadopago.com.br', 'mercadolivre.com',
+    'pagbank.com.br', 'pagseguro.com.br', 'neon.com.br', 'original.com.br',
+    'safra.com.br', 'sicoob.com.br', 'sicredi.com.br', 'banrisul.com.br',
+    'brb.com.br', 'willbank.com.br', 'stone.com.br', 'rico.com.vc',
+    'clear.com.vc', 'binance.com', 'mercadobitcoin.com.br',
+    'porto.com.br', 'unimed.coop.br', 'amil.com.br'
+  ];
+
+  // Palavras que aparecem no assunto de e-mails de extrato e fatura.
+  R.EMAIL_SUBJECTS = [
+    'fatura', 'extrato', 'demonstrativo', 'informe de rendimentos',
+    'sua fatura', 'seu extrato', 'nota de corretagem'
+  ];
+
+  // Extensões que o sistema sabe processar. PDF entra na busca porque
+  // vale mostrar que o e-mail existe, mesmo sem saber ler ainda.
+  R.EMAIL_EXTENSIONS = ['ofx', 'csv', 'xlsx', 'xls', 'ofc', 'qfx', 'pdf'];
+
   R.institutionById = function (id) {
     return R.INSTITUTIONS.find(i => i.id === id) || R.INSTITUTIONS[R.INSTITUTIONS.length - 1];
   };

@@ -123,6 +123,7 @@
       '</div>' +
       '<div class="nav-foot">' +
       '<button data-act="import">＋ Importar extrato</button>' +
+      '<button data-act="gmail">✉ Buscar no Gmail</button>' +
       '<button data-act="backup">↓ Backup</button>' +
       '<button data-act="theme">◐ Tema</button>' +
       '<span id="saveState"></span>' +
