@@ -204,7 +204,10 @@
           return UI.offerRestore(parsed.rawText, file.name);
         }
         if (!parsed.statements.length) {
-          reports.push({ filename: file.name, failed: true, warnings: parsed.warnings });
+          reports.push({
+            filename: file.name, failed: true, warnings: parsed.warnings,
+            linhas: parsed._linhas || null, codigo: parsed._codigo || null
+          });
           continue;
         }
         const rep = await ENGINE.importParsed(parsed, file, {});
@@ -218,6 +221,36 @@
     UI.closeModal();
     UI.showImportReport(reports);
     UI.render();
+  };
+
+  // Guarda o texto lido de PDFs que falharam, para o diagnóstico.
+  // Fica só em memória: nada disso vai para o disco nem para a rede.
+  UI._linhasPdf = {};
+
+  UI.actions.vertexto = function (el) {
+    const linhas = UI._linhasPdf[el.dataset.i] || [];
+    UI.modal('<h2>Texto extraído do PDF</h2>' +
+      '<p style="font-size:.87rem;color:var(--ink-2)">Foi isto que consegui ler do arquivo. ' +
+      'Se você reconhecer aqui as linhas dos lançamentos, o problema é só o reconhecimento do ' +
+      'padrão — me mostre <b>uma linha de exemplo</b> (pode trocar os valores por outros) que eu ajusto. ' +
+      'Se o texto estiver embaralhado ou vazio, o PDF usa fontes que não consigo decifrar.</p>' +
+      '<textarea readonly rows="18" style="font-family:var(--mono);font-size:.72rem;white-space:pre">' +
+      esc(linhas.join('\n')) + '</textarea>' +
+      '<div class="modal-foot">' +
+      '<button class="btn" data-x="copiar">Copiar tudo</button>' +
+      '<button class="btn primary" data-x="fechar">Fechar</button></div>',
+      {
+        wide: true,
+        onMount(m) {
+          m.querySelector('[data-x=fechar]').onclick = UI.closeModal;
+          m.querySelector('[data-x=copiar]').onclick = () => {
+            const ta = m.querySelector('textarea');
+            ta.select();
+            try { document.execCommand('copy'); UI.toast('Texto copiado.', 'good'); }
+            catch (e) { UI.toast('Selecione o texto e copie com Ctrl+C.', 'bad'); }
+          };
+        }
+      });
   };
 
   UI.showImportReport = function (reports) {
@@ -258,9 +291,15 @@
       });
     });
 
-    bad.forEach(r => {
+    bad.forEach((r, i) => {
+      if (r.linhas && r.linhas.length) UI._linhasPdf[i] = r.linhas;
       html += '<div class="note bad" style="margin:.4rem 0"><b>' + esc(r.filename) + '</b><br>' +
-        (r.warnings || []).map(esc).join('<br>') + '</div>';
+        (r.warnings || []).map(w => esc(w).replace(/\n/g, '<br>')).join('<br>') +
+        (r.linhas && r.linhas.length
+          ? '<div style="margin-top:.5rem"><button class="btn sm" data-act="vertexto" data-i="' + i + '">' +
+          'Ver texto extraído (' + r.linhas.length + ' linhas)</button></div>'
+          : '') +
+        '</div>';
     });
 
     html += '<div class="modal-foot">' +

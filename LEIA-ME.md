@@ -45,9 +45,8 @@ Três coisas importantes:
 
 - **Só funciona no site publicado**, não no arquivo local. O login do Google exige
   endereço `https://`.
-- **Anexo em PDF ainda não é lido.** A busca mostra o e-mail e avisa, mas não
-  processa — e a maioria das faturas de cartão vem em PDF. Na prática essa busca
-  rende mais para extrato de conta em OFX/CSV.
+- **Anexos em PDF agora são lidos**, o que faz a busca render bem também para
+  fatura de cartão, que quase sempre chega nesse formato.
 - **Exige uma credencial sua do Google**, criada uma única vez e gratuita. O app
   te guia pelas cinco etapas na primeira vez que você clica no botão. É assim
   porque o Google não permite que um app acesse sua conta sem uma credencial
@@ -132,7 +131,10 @@ O sistema lembra você se passar mais de 30 dias sem backup.
 
 Coisas que precisam de um servidor ou de conexão externa, e que ficaram de fora:
 
-- **Leitura de PDF.** Baixe OFX ou CSV no banco — praticamente todos oferecem.
+- **PDF escaneado ou fotografado.** É imagem, não texto: exigiria reconhecimento
+  óptico. PDF gerado pelo banco funciona normalmente.
+- **PDF protegido por senha.** O app detecta e avisa. Contorno: abra o arquivo,
+  use *Imprimir → Salvar como PDF* e importe a cópia sem senha.
 - **Cotações automáticas de investimentos.** Na aba Investimentos você informa o valor
   atual de cada posição; atualizar uma vez por mês já deixa a evolução correta.
 - **Open Finance.** Exige credenciamento de agregador e servidor próprio.
@@ -161,6 +163,8 @@ js/util.js         formatos brasileiros: dinheiro, datas, texto, similaridade
 js/store.js        armazenamento local (IndexedDB) e backup
 js/rules.js        categorias e as regras semeadas para o Brasil
 js/parse.js        leitores de OFX, CSV e XLSX
+js/pdf.js          leitor de PDF: objetos, streams, fontes e texto posicionado
+js/pdftx.js        reconhece lançamentos nas linhas extraídas do PDF
 js/engine.js       deduplicação, categorização, cartões, parcelas, recorrências
 js/insights.js     previsão de caixa e detectores de insight
 js/charts.js       gráficos em SVG

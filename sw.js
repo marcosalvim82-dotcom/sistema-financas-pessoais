@@ -10,7 +10,7 @@
    o aviso de atualização.
    ══════════════════════════════════════════════════════════════════ */
 
-const VERSAO = 'v1.2.2';
+const VERSAO = 'v1.3.0';
 const CACHE = 'financas-' + VERSAO;
 
 const ARQUIVOS = [
@@ -21,6 +21,8 @@ const ARQUIVOS = [
   './js/util.js',
   './js/store.js',
   './js/rules.js',
+  './js/pdf.js',
+  './js/pdftx.js',
   './js/parse.js',
   './js/engine.js',
   './js/insights.js',

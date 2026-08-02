@@ -236,7 +236,8 @@
         .map(r => '<tr><td><b>' + r[0] + '</b></td><td>' + r[1] + '</td><td>' + r[2] + '</td></tr>').join('') +
       '</tbody></table></div>' +
       '<div class="muted" style="font-size:.78rem">Prefira sempre <b>OFX</b>: traz identificador único por lançamento, ' +
-      'o que torna a deduplicação perfeita. CSV e XLSX funcionam bem; PDF ainda não é lido nesta versão.</div>' +
+      'o que torna a deduplicação perfeita. CSV, XLSX e PDF também funcionam — ' +
+      'no PDF eu leio o texto direto do arquivo, desde que não seja escaneado nem protegido por senha.</div>' +
       '</div>' +
       '<div class="card"><h3>Já usou o sistema antes?</h3>' +
       '<div class="row"><button class="btn" data-act="import">Restaurar um backup .json</button>' +

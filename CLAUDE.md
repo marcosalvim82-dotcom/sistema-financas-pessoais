@@ -95,6 +95,8 @@ objeto em `window`. Não são módulos ES (não funcionariam em `file://`).
 | `js/store.js` | `DB` | IndexedDB (fallback localStorage), gravação adiada, backup/restauração |
 | `js/rules.js` | `RULES` | 15 categorias-mãe + subcategorias, ~95 regras semeadas para o Brasil, assinaturas de instituições |
 | `js/parse.js` | `PARSE` | Leitores de OFX, CSV e XLSX; detecção de codificação, delimitador, cabeçalho e instituição |
+| `js/pdf.js` | `PDF` | Leitor de PDF do zero: varre objetos, infla streams (`DecompressionStream`), expande ObjStm, decodifica fontes via ToUnicode e emite texto com coordenadas |
+| `js/pdftx.js` | `PDFTX` | Converte as linhas do PDF em lançamentos: data no começo, valor no fim, descrição no meio; filtra cabeçalho, total e rodapé |
 | `js/engine.js` | `ENGINE` | Deduplicação, cascata de categorização, aprendizado, parcelamentos, ciclos de cartão, transferências, recorrências |
 | `js/insights.js` | `INSIGHTS` | Previsão de caixa 90 dias, detectores de insight, séries do painel |
 | `js/charts.js` | `CHARTS` | Gráficos em SVG escritos à mão |

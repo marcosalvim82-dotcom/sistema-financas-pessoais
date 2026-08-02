@@ -16,6 +16,8 @@
 <script src="../js/util.js"></script>
 <script src="../js/store.js"></script>
 <script src="../js/rules.js"></script>
+<script src="../js/pdf.js"></script>
+<script src="../js/pdftx.js"></script>
 <script src="../js/parse.js"></script>
 <script src="../js/engine.js"></script>
 <script src="../js/insights.js"></script>
@@ -276,6 +278,190 @@
   document.getElementById('r2').textContent = linha2;
 
   document.title = document.getElementById('r').textContent + ' /// ' + linha2;
+  window.__linha1 = document.getElementById('r').textContent;
+  window.__linha2 = linha2;
+})();
+</script>
+
+<script>
+/* ══════════ Leitor de PDF: monta PDFs sintéticos e confere ══════════ */
+(function () {
+  var falhas = [];
+  function exigir(nome, cond) { if (!cond) falhas.push(nome); }
+
+  function escapar(s) {
+    return String(s).replace(/([\\()])/g, '\\$1');
+  }
+
+  // Monta um PDF válido a partir de linhas posicionadas.
+  // linhas: [{ y, partes: [{ x, texto }] }]
+  function montarPDF(linhas, opts) {
+    opts = opts || {};
+    var conteudo = 'BT\n';
+    linhas.forEach(function (L) {
+      L.partes.forEach(function (p) {
+        conteudo += '/F1 10 Tf\n';
+        conteudo += '1 0 0 1 ' + p.x + ' ' + L.y + ' Tm\n';
+        if (opts.hex) {
+          var hex = '';
+          for (var i = 0; i < p.texto.length; i++) {
+            hex += p.texto.charCodeAt(i).toString(16).padStart(4, '0');
+          }
+          conteudo += '<' + hex + '> Tj\n';
+        } else {
+          conteudo += '(' + escapar(p.texto) + ') Tj\n';
+        }
+      });
+    });
+    conteudo += 'ET\n';
+    return { conteudo: conteudo, opts: opts };
+  }
+
+  function bytesDe(s) {
+    var b = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xFF;
+    return b;
+  }
+
+  async function comprimir(str) {
+    var cs = new CompressionStream('deflate');
+    var stream = new Blob([bytesDe(str)]).stream().pipeThrough(cs);
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  async function gerarArquivo(spec) {
+    var conteudo = spec.conteudo;
+    var corpoStream, filtro = '';
+    if (spec.opts.comprimido) {
+      var z = await comprimir(conteudo);
+      corpoStream = '';
+      for (var i = 0; i < z.length; i++) corpoStream += String.fromCharCode(z[i]);
+      filtro = ' /Filter /FlateDecode';
+    } else {
+      corpoStream = conteudo;
+    }
+
+    var fonte;
+    if (spec.opts.hex) {
+      // Type0 com ToUnicode: cada código de 2 bytes vira um caractere.
+      var mapa = '';
+      var vistos = {};
+      (spec.opts.caracteres || '').split('').forEach(function (ch) {
+        if (vistos[ch]) return;
+        vistos[ch] = 1;
+        var c = ch.charCodeAt(0).toString(16).padStart(4, '0');
+        mapa += '<' + c + '> <' + c + '>\n';
+      });
+      var cmap = '/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n' +
+        '1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n' +
+        (Object.keys(vistos).length) + ' beginbfchar\n' + mapa + 'endbfchar\n' +
+        'endcmap\nend\nend\n';
+      fonte =
+        '5 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /Teste /ToUnicode 6 0 R >>\nendobj\n' +
+        '6 0 obj\n<< /Length ' + cmap.length + ' >>\nstream\n' + cmap + '\nendstream\nendobj\n';
+    } else {
+      fonte = '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica ' +
+        '/Encoding /WinAnsiEncoding >>\nendobj\n';
+    }
+
+    var pdf =
+      '%PDF-1.4\n' +
+      '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
+      '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n' +
+      '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ' +
+      '/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n' +
+      '4 0 obj\n<< /Length ' + corpoStream.length + filtro + ' >>\nstream\n' +
+      corpoStream + '\nendstream\nendobj\n' +
+      fonte +
+      (spec.opts.cifrado ? '9 0 obj\n<< /Filter /Standard /V 2 /R 3 >>\nendobj\ntrailer\n<< /Root 1 0 R /Encrypt 9 0 R >>\n'
+        : 'trailer\n<< /Root 1 0 R >>\n') +
+      '%%EOF';
+
+    return bytesDe(pdf).buffer;
+  }
+
+  // Fatura de cartão fictícia, no formato que os emissores usam.
+  var LINHAS_FATURA = [
+    { y: 780, partes: [{ x: 40, texto: 'FATURA DO CARTAO DE CREDITO' }] },
+    { y: 760, partes: [{ x: 40, texto: 'Vencimento 10/08/2026' }, { x: 300, texto: 'Limite total 12.000,00' }] },
+    { y: 730, partes: [{ x: 40, texto: 'Data' }, { x: 110, texto: 'Descricao' }, { x: 480, texto: 'Valor' }] },
+    { y: 710, partes: [{ x: 40, texto: '12/07' }, { x: 110, texto: 'IFD*IFOOD' }, { x: 480, texto: '64,80' }] },
+    { y: 695, partes: [{ x: 40, texto: '14/07' }, { x: 110, texto: 'POSTO IPIRANGA' }, { x: 480, texto: '287,40' }] },
+    { y: 680, partes: [{ x: 40, texto: '15/07' }, { x: 110, texto: 'MAGAZINE LUIZA PARC 03/12' }, { x: 480, texto: '412,00' }] },
+    { y: 665, partes: [{ x: 40, texto: '18/07' }, { x: 110, texto: 'DROGARIA SAO PAULO' }, { x: 480, texto: '1.189,90' }] },
+    { y: 640, partes: [{ x: 40, texto: 'Total da fatura' }, { x: 480, texto: '1.954,10' }] },
+    { y: 600, partes: [{ x: 40, texto: 'Central de atendimento 0800 123 4567' }] }
+  ];
+
+  async function rodar() {
+    try {
+      exigir('pdf-modulo', typeof PDF !== 'undefined' && typeof PDFTX !== 'undefined');
+
+      // 1 · PDF simples, sem compressão
+      var buf1 = await gerarArquivo(montarPDF(LINHAS_FATURA, {}));
+      var r1 = await PDFTX.parse(buf1, 'fatura-teste.pdf');
+      var recs = r1.statements[0].records;
+      exigir('pdf-simples-qtd', recs.length === 4);
+      exigir('pdf-simples-cartao', r1.statements[0].kind === 'card');
+      exigir('pdf-simples-sinal', recs.every(function (r) { return r.amountCents < 0; }));
+
+      var ifood = recs.find(function (r) { return /IFOOD/.test(r.descriptor); });
+      exigir('pdf-simples-ifood', !!ifood && ifood.amountCents === -6480);
+      exigir('pdf-simples-data', !!ifood && ifood.date === '2026-07-12');
+
+      var milhar = recs.find(function (r) { return /DROGARIA/.test(r.descriptor); });
+      exigir('pdf-milhar', !!milhar && milhar.amountCents === -118990);
+
+      // Cabeçalho, total e rodapé não podem virar lançamento.
+      exigir('pdf-ignora-total', !recs.some(function (r) { return /Total/i.test(r.descriptor); }));
+      exigir('pdf-limite', r1.statements[0].creditLimitCents === 1200000);
+      exigir('pdf-vencimento', r1.statements[0].dueDate === '2026-08-10');
+
+      // 2 · Mesmo PDF, agora com stream comprimido
+      var buf2 = await gerarArquivo(montarPDF(LINHAS_FATURA, { comprimido: true }));
+      var r2 = await PDFTX.parse(buf2, 'fatura-comprimida.pdf');
+      exigir('pdf-comprimido', r2.statements[0].records.length === 4);
+
+      // 3 · Fonte de subconjunto com ToUnicode (o caso que embaralha texto)
+      var todosChars = LINHAS_FATURA.map(function (L) {
+        return L.partes.map(function (p) { return p.texto; }).join('');
+      }).join('');
+      var buf3 = await gerarArquivo(montarPDF(LINHAS_FATURA, { hex: true, caracteres: todosChars }));
+      var r3 = await PDFTX.parse(buf3, 'fatura-fonte.pdf');
+      exigir('pdf-tounicode', r3.statements[0].records.length === 4);
+      var ifood3 = r3.statements[0].records.find(function (r) { return /IFOOD/.test(r.descriptor); });
+      exigir('pdf-tounicode-texto', !!ifood3);
+
+      // 4 · PDF protegido precisa ser detectado, não falhar em silêncio
+      var buf4 = await gerarArquivo(montarPDF(LINHAS_FATURA, { cifrado: true }));
+      var erro4 = null;
+      try { await PDFTX.parse(buf4, 'protegido.pdf'); } catch (e) { erro4 = e; }
+      exigir('pdf-protegido', erro4 && erro4.codigo === 'PDF_PROTEGIDO');
+
+      // 5 · O importador precisa aceitar PDF de ponta a ponta
+      var arquivo = new File([buf1], 'fatura-teste.pdf', { type: 'application/pdf' });
+      var viaParse = await PARSE.parseFile(arquivo);
+      exigir('pdf-via-parsefile', viaParse.format === 'pdf' &&
+        viaParse.statements.length === 1 &&
+        viaParse.statements[0].records.length === 4);
+
+      // 6 · Parcela reconhecida dentro do PDF
+      var parcela = ENGINE.detectInstallment('MAGAZINE LUIZA PARC 03/12');
+      exigir('pdf-parcela', parcela && parcela.no === 3 && parcela.total === 12);
+
+    } catch (e) {
+      falhas.push('excecao:' + (e && e.message ? e.message.slice(0, 60) : e));
+    }
+
+    var linha3 = (falhas.length ? 'FALHOU [' + falhas.join(' | ') + ']' : 'OK') + ' :: pdf';
+    var el = document.createElement('pre');
+    el.id = 'r3';
+    el.textContent = linha3;
+    document.body.appendChild(el);
+    document.title = window.__linha1 + ' /// ' + window.__linha2 + ' /// ' + linha3;
+  }
+
+  rodar();
 })();
 </script>
 </body>

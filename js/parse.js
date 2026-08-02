@@ -544,12 +544,16 @@
     const format = P.detectFormat(name, head);
 
     if (format === 'pdf') {
-      return {
-        format: 'pdf', institution: null, statements: [],
-        warnings: ['Leitura de PDF ainda não está disponível nesta versão local. ' +
-          'No app do banco, baixe o extrato em OFX ou CSV — quase todos oferecem. ' +
-          'Para fatura de cartão, o Nubank e o Inter exportam CSV; Itaú e Bradesco exportam OFX.']
-      };
+      try {
+        return await PDFTX.parse(buffer, name);
+      } catch (e) {
+        return {
+          format: 'pdf', institution: null, statements: [],
+          warnings: [e.message || String(e)],
+          _codigo: e.codigo || null,
+          _linhas: e.linhas || null
+        };
+      }
     }
     if (format === 'json') {
       return { format: 'json', institution: null, statements: [], warnings: ['__BACKUP__'], rawText: P.decode(buffer) };
