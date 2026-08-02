@@ -42,20 +42,22 @@ sempre antes de dizer que terminou.
 
 ## Publicar
 
-O site é servido pela Cloudflare Pages conectada ao repositório
-`marcosalvim82-dotcom/sistema-financas-pessoais`. **Todo push na branch `main`
-publica automaticamente.**
+O procedimento completo está na skill **`publicar`**
+(`.claude/skills/publicar/SKILL.md`). Invoque-a ao terminar qualquer alteração
+nos arquivos do app — ela cobre os passos que, esquecidos, fazem a alteração
+não chegar ao navegador do usuário.
 
-Por isso, ao terminar qualquer alteração nos arquivos do app:
+O resumo, para não depender de carregar a skill:
 
-1. **Incremente `const VERSAO` no topo do `sw.js`** (`v1.0.0` → `v1.0.1`).
-   Sem isso o service worker serve a versão antiga do cache e a alteração parece
-   não ter funcionado. Esta é a causa número um de "mudou nada".
-2. Rode `./testar.cmd`.
-3. Faça o commit.
-4. **Não faça `git push`** — está bloqueado no `.claude/settings.json` de propósito,
-   porque publicar é ação que sai da máquina. Deixe o commit pronto e avise que
-   basta `git push` para ir ao ar.
+1. **Incremente `const VERSAO` no topo do `sw.js`.** Sem isso o service worker
+   serve a versão antiga do cache e a alteração parece não ter funcionado.
+   É a causa número um de "mudou nada".
+2. Arquivo novo precisa entrar na lista `ARQUIVOS` do `sw.js`, senão o modo
+   offline quebra.
+3. Rode `testar.cmd`.
+4. Commit em português, explicando o porquê.
+5. **Não faça `git push`** — está bloqueado no `.claude/settings.json` de
+   propósito. Avise que basta duplo clique em `publicar.cmd`.
 
 ---
 

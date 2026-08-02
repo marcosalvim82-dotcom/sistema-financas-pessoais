@@ -153,6 +153,7 @@ formato de migração — nada se perde.
 index.html         abre o sistema
 publicar.cmd       duplo clique: testa e publica o site
 testar.cmd         duplo clique: só roda o teste
+.claude/skills/    instruções que o Claude carrega ao publicar
 Financas.html      redirecionamento, para atalhos antigos
 manifest.webmanifest  identidade do app instalável (PWA)
 sw.js              service worker: cache offline e aviso de atualização
