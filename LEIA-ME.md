@@ -116,6 +116,26 @@ O sistema lembra você se passar mais de 30 dias sem backup.
 
 ---
 
+## Acessibilidade
+
+O app é utilizável sem mouse e sem enxergar a tela:
+
+- **Link "pular para o conteúdo"** aparece ao apertar Tab, evitando percorrer o
+  menu inteiro a cada tela.
+- **Leitor de tela** recebe cada lançamento como uma frase completa
+  ("5 de julho de 2026, iFood, saída de R$ 64,80, categoria Alimentação › Delivery")
+  em vez de fragmentos soltos.
+- **Gráficos têm nome, descrição e tabela.** Todo gráfico traz um
+  *"Ver números exatos"* que abre os dados em tabela — útil para quem usa leitor
+  de tela e para quem simplesmente quer o número, não o desenho.
+- **Janelas prendem o foco** enquanto abertas e o devolvem ao fechar.
+- **Mudanças são anunciadas**: fim de importação, filtro aplicado, troca de tela.
+- **Contraste** de todo texto atende ao nível AA das diretrizes WCAG.
+- **Teclado nos gráficos**: com o gráfico focado, as setas percorrem os valores.
+
+Há uma auditoria automática no `testar.cmd` que falha a publicação se alguma
+dessas garantias for perdida.
+
 ## Atalhos de teclado
 
 | Tecla | O que faz |

@@ -712,6 +712,37 @@
     }).filter(l => l.texto);
   };
 
+  // Agrupa os pedaços de uma linha em "células", separando onde há um
+  // vão horizontal grande. É isso que reconstrói as colunas da tabela —
+  // e só com as colunas dá para saber que o último número de
+  // "12/07  IFOOD  64,80  4.512,30" é saldo, não o valor da compra.
+  P.celulas = function (linha) {
+    const itens = linha.itens || [];
+    if (!itens.length) return [];
+    const cels = [];
+    let atual = null;
+    let fimAnterior = null;
+
+    itens.forEach(it => {
+      const larguraChar = it.tamanho * 0.5;
+      const vao = fimAnterior === null ? 0 : it.x - fimAnterior;
+      // Um vão maior que ~1,4 caractere separa colunas; menor que isso
+      // é só o espaçamento normal entre palavras.
+      if (!atual || vao > larguraChar * 1.4) {
+        atual = { x: it.x, texto: '', fim: 0 };
+        cels.push(atual);
+      } else if (vao > larguraChar * 0.4) {
+        atual.texto += ' ';
+      }
+      atual.texto += it.texto;
+      fimAnterior = it.x + it.texto.length * larguraChar;
+      atual.fim = fimAnterior;
+    });
+
+    return cels.map(c => ({ x: c.x, fim: c.fim, texto: c.texto.replace(/\s{2,}/g, ' ').trim() }))
+      .filter(c => c.texto);
+  };
+
   P.textoCompleto = async function (buffer) {
     const paginas = await P.extrairTexto(buffer);
     return paginas.map(p => P.linhas(p).map(l => l.texto).join('\n')).join('\n\n');

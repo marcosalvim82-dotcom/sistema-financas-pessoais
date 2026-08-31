@@ -23,11 +23,24 @@
       ? (d().cards.find(c => c.id === t.cardId) || {}).name
       : (d().accounts.find(a => a.id === t.accountId) || {}).name;
     const sel = UI.state.selection.has(t.id);
+    const nome = t.merchantName || t.descriptorRaw || 'lançamento sem descrição';
+    // Um resumo em texto corrido: é o que o leitor de tela anuncia, no
+    // lugar de ler os fragmentos visuais soltos e fora de ordem.
+    const resumo = U.fmtDate(t.date, 'long') + ', ' + nome + ', ' +
+      (t.amountCents < 0 ? 'saída de ' : 'entrada de ') + U.money(Math.abs(t.amountCents)) +
+      ', categoria ' + cat + (owner ? ', em ' + owner : '') +
+      (t.installmentTotal ? ', parcela ' + t.installmentNo + ' de ' + t.installmentTotal : '') +
+      (t.needsReview ? ', precisa de revisão' : '');
+
     return '<div class="trow ' + (sel ? 'sel' : '') + '" data-tx="' + t.id + '">' +
-      (opts.selectable ? '<input type="checkbox" data-selecttx="' + t.id + '" ' + (sel ? 'checked' : '') + '>' : '<span></span>') +
-      '<span class="tdate">' + U.fmtDate(t.date, 'short') + '</span>' +
-      '<span class="tmain">' +
-      '<span class="tname">' + esc(t.merchantName || t.descriptorRaw || '—') + '</span>' +
+      (opts.selectable
+        ? '<input type="checkbox" data-selecttx="' + t.id + '" ' + (sel ? 'checked' : '') +
+        ' aria-label="Selecionar ' + esc(nome) + ' de ' + esc(U.fmtDate(t.date)) + '">'
+        : '<span></span>') +
+      '<span class="sr-only">' + esc(resumo) + '</span>' +
+      '<span class="tdate" aria-hidden="true">' + U.fmtDate(t.date, 'short') + '</span>' +
+      '<span class="tmain" aria-hidden="true">' +
+      '<span class="tname">' + esc(nome) + '</span>' +
       '<span class="tmeta">' +
       '<span class="dotcat" style="background:' + color + '"></span>' + esc(cat) +
       (owner ? ' · ' + esc(owner) : '') +
@@ -36,10 +49,13 @@
       (t.needsReview ? ' · <span class="pill warn">revisar</span>' : '') +
       (t.status === 'projected' ? ' · <span class="pill">previsto</span>' : '') +
       '</span></span>' +
-      '<span class="tamt ' + amtClass(t.amountCents) + '">' + U.money(t.amountCents, { signed: true }) + '</span>' +
+      '<span class="tamt ' + amtClass(t.amountCents) + '" aria-hidden="true">' +
+      U.money(t.amountCents, { signed: true }) + '</span>' +
       '<span class="tact">' +
-      '<button class="btn sm" data-act="editcat" data-id="' + t.id + '" title="Mudar categoria">categoria</button>' +
-      '<button class="btn sm" data-act="txdetail" data-id="' + t.id + '" title="Detalhes">⋯</button>' +
+      '<button class="btn sm" data-act="editcat" data-id="' + t.id + '" ' +
+      'aria-label="Mudar categoria de ' + esc(nome) + '"><span aria-hidden="true">categoria</span></button>' +
+      '<button class="btn sm" data-act="txdetail" data-id="' + t.id + '" ' +
+      'aria-label="Detalhes de ' + esc(nome) + '"><span aria-hidden="true">⋯</span></button>' +
       '</span></div>';
   }
   UI.txRow = txRow;
@@ -73,14 +89,35 @@
         'Resolver leva menos de um minuto — e o sistema aprende com cada resposta. →</button>';
     }
 
+    // Uma frase antes dos números. Quem abre o app quer saber se está
+    // tudo bem, não interpretar quatro cartões de estatística.
+    html += '<p class="explica">' + resumoDoMes(mt, savingRate, fc, mk) + '</p>';
+
+    const diasNoMes = U.daysInMonth(mk);
+    const diaHoje = +today.split('-')[2];
+    const fracMes = diaHoje / diasNoMes;
+
     html += '<div class="grid g4">' +
-      kpi('Patrimônio líquido', U.money(nw.net), 'Ativos ' + U.moneyShort(nw.assets) +
-        ' · dívidas ' + U.moneyShort(nw.liabilities),
-        CHARTS.spark(series.map(s => s.net))) +
-      kpi('Entradas do mês', U.money(mt.income), prev ? cmp(mt.income, prev.income) : '') +
-      kpi('Saídas do mês', U.money(mt.expense), prev ? cmp(mt.expense, prev.expense, true) : '') +
-      kpi('Taxa de poupança', savingRate === null ? '—' : U.pct(savingRate, 0),
-        savingRate === null ? 'sem receita registrada' : U.money(mt.net) + ' guardados este mês') +
+      kpi('Patrimônio líquido', U.money(nw.net),
+        'Tudo que você tem menos tudo que deve.',
+        CHARTS.spark(series.map(s => s.net)),
+        'Você tem ' + U.moneyShort(nw.assets) + ' e deve ' + U.moneyShort(nw.liabilities) + '.') +
+
+      kpi('Entradas do mês', U.money(mt.income),
+        prev ? cmp(mt.income, prev.income) : 'Primeiro mês registrado.') +
+
+      kpi('Saídas do mês', U.money(mt.expense),
+        prev ? cmp(mt.expense, prev.expense, true) : 'Primeiro mês registrado.',
+        null,
+        ritmoDoMes(mt.expense, prev ? prev.expense : 0, fracMes)) +
+
+      kpi('Quanto sobrou', savingRate === null ? '—' : U.money(mt.net),
+        savingRate === null
+          ? 'Nenhuma receita registrada ainda neste mês.'
+          : 'De cada R$ 100 que entraram, você guardou <b>R$ ' +
+          Math.max(0, Math.round(savingRate * 100)) + '</b>.',
+        null,
+        savingRate === null ? '' : barraPoupanca(savingRate)) +
       '</div>';
 
     // Insights
@@ -94,47 +131,73 @@
     }
 
     html += '<div class="grid g2">' +
-      '<div class="card"><h3>Saldo projetado · 90 dias</h3>' + CHARTS.forecast(fc.points) +
-      '<div class="muted" style="font-size:.76rem">Inclui faturas de cartão, parcelas e contas recorrentes já detectadas. ' +
-      'A faixa mostra a variação provável do gasto do dia a dia.</div></div>' +
-      '<div class="card"><h3>Gastos por categoria · ' + U.fmtMonth(mk, true) + '</h3>' +
-      CHARTS.categoryBars(cats, { limit: 7 }) + '</div>' +
+      '<div class="card">' + CHARTS.forecast(fc.points, {
+        titulo: 'Quanto você deve ter em caixa',
+        explica: 'Próximos 90 dias, já descontando faturas de cartão, parcelas e contas fixas ' +
+          'que o sistema reconheceu. A faixa mais clara é a margem de erro: o gasto do dia a dia ' +
+          'varia, e fingir precisão aqui seria mentira.'
+      }) + '</div>' +
+      '<div class="card">' + CHARTS.categoryBars(cats, {
+        limit: 7,
+        titulo: 'Para onde foi o dinheiro',
+        explica: 'Saídas de ' + U.fmtMonth(mk, true) + ', da maior para a menor. Clique numa ' +
+          'categoria para ver os lançamentos que a compõem.'
+      }) + '</div>' +
       '</div>';
 
-    html += '<div class="card"><h3>Entradas e saídas · 12 meses</h3>' + CHARTS.monthlyBars(series) + '</div>';
+    html += '<div class="card">' + CHARTS.monthlyBars(series, {
+      titulo: 'Entradas e saídas, mês a mês',
+      explica: 'Doze meses lado a lado. O que importa aqui não é a altura de uma barra isolada, ' +
+        'e sim a distância entre a verde e a vermelha: é ela que vira poupança.'
+    }) + '</div>';
 
     html += '<div class="grid g2">' +
-      '<div class="card"><h3>Fixo, parcelado e variável</h3>' +
-      mixRow('Recorrente', mix.recorrente, mix.total, 'var(--brass)') +
-      mixRow('Parcelado', mix.parcelado, mix.total, 'var(--warn)') +
-      mixRow('Variável', mix.variavel, mix.total, 'var(--ink-3)') +
-      '<div class="muted" style="font-size:.76rem;margin-top:.3rem">O variável é a única parte sobre a qual você decide todo dia.</div>' +
+      '<div class="card"><h3>Quanto do seu gasto você ainda controla</h3>' +
+      '<p class="chart-explica">Compromisso já assumido contra escolha do dia a dia. ' +
+      'Só a fatia cinza está sob seu controle neste mês — o resto já estava decidido antes de ele começar.</p>' +
+      mixRow('Recorrente (contas fixas e assinaturas)', mix.recorrente, mix.total, 'var(--brass)') +
+      mixRow('Parcelado (comprado no passado)', mix.parcelado, mix.total, 'var(--warn)') +
+      mixRow('Variável (você decide agora)', mix.variavel, mix.total, 'var(--ink-3)') +
       '</div>' +
       '<div class="card"><h3>Onde você mais gastou este mês</h3>' +
       (function () {
         const tops = INSIGHTS.topMerchants(mk + '-01', U.endOfMonth(mk), 7);
-        if (!tops.length) return '<div class="empty-chart">Sem gastos no mês.</div>';
-        return tops.map(m => '<button class="trow" data-act="searchm" data-q="' + esc(m.name) + '" style="width:100%">' +
-          '<span></span><span class="tdate">' + m.count + '×</span>' +
-          '<span class="tmain"><span class="tname">' + esc(m.name) + '</span>' +
+        if (!tops.length) return '<div class="empty-chart">Sem gastos registrados no mês.</div>';
+        return '<ul style="list-style:none;margin:0;padding:0">' + tops.map(m =>
+          '<li><button class="trow" data-act="searchm" data-q="' + esc(m.name) + '" style="width:100%" ' +
+          'aria-label="' + esc(m.name + ', ' + U.money(m.cents) + ' em ' + m.count +
+            (m.count > 1 ? ' compras' : ' compra') + '. Ver lançamentos.') + '">' +
+          '<span aria-hidden="true"></span><span class="tdate" aria-hidden="true">' + m.count + '×</span>' +
+          '<span class="tmain" aria-hidden="true"><span class="tname">' + esc(m.name) + '</span>' +
           '<span class="tmeta">' + esc(ENGINE.categoryLabel(m.categoryId)) + '</span></span>' +
-          '<span class="tamt neg">' + U.money(m.cents) + '</span><span></span></button>').join('');
+          '<span class="tamt neg" aria-hidden="true">' + U.money(m.cents) + '</span>' +
+          '<span aria-hidden="true"></span></button></li>').join('') + '</ul>';
       })() + '</div>' +
       '</div>';
 
     // Cartões
     if (data.cards.length) {
-      html += '<div class="card"><h3>Cartões</h3><div class="grid g3">' +
+      html += '<div class="card"><h3>Cartões</h3>' +
+        '<p class="chart-explica">O valor grande é o que já está comprometido: fatura aberta mais ' +
+        'faturas fechadas ainda não pagas.</p>' +
+        '<div class="grid g3">' +
         data.cards.map(c => {
           const s = ENGINE.cardSummary(c);
-          return '<button class="card flat" data-nav="cartoes" style="align-items:flex-start">' +
-            '<span class="lbl">' + esc(c.name) + '</span>' +
-            '<span class="num" style="font-size:1.1rem">' + U.money(s.openCents + s.unpaidCents) + '</span>' +
-            '<span class="muted" style="font-size:.74rem">' +
-            (s.nextDue ? 'vence ' + U.fmtDate(s.nextDue) : 'sem vencimento definido') +
-            (s.committedCents ? ' · ' + U.moneyShort(s.committedCents) + ' em parcelas' : '') + '</span>' +
-            (s.usedPct !== null ? '<span class="prog"><i style="width:' + (s.usedPct * 100).toFixed(0) +
-              '%;background:' + (s.usedPct > 0.8 ? 'var(--neg)' : 'var(--brass)') + '"></i></span>' : '') +
+          const devido = s.openCents + s.unpaidCents;
+          const rotulo = c.name + ': ' + U.money(devido) + ' comprometido' +
+            (s.nextDue ? ', vence em ' + U.fmtDate(s.nextDue) : '') +
+            (s.usedPct !== null ? ', ' + U.pct(s.usedPct, 0) + ' do limite usado' : '') +
+            '. Ver detalhes do cartão.';
+          return '<button class="card flat" data-nav="cartoes" style="align-items:flex-start" ' +
+            'aria-label="' + esc(rotulo) + '">' +
+            '<span class="lbl" aria-hidden="true">' + esc(c.name) + '</span>' +
+            '<span class="num" style="font-size:1.1rem" aria-hidden="true">' + U.money(devido) + '</span>' +
+            '<span class="muted" style="font-size:.74rem" aria-hidden="true">' +
+            (s.nextDue ? 'vence ' + U.fmtDate(s.nextDue) : 'vencimento ainda não definido') +
+            (s.committedCents ? ' · ' + U.moneyShort(s.committedCents) + ' em parcelas futuras' : '') + '</span>' +
+            (s.usedPct !== null ? '<span class="prog" aria-hidden="true"><i style="width:' +
+              (s.usedPct * 100).toFixed(0) + '%;background:' +
+              (s.usedPct > 0.8 ? 'var(--neg)' : 'var(--brass)') + '"></i></span>' : '') +
             '</button>';
         }).join('') + '</div></div>';
     }
@@ -143,10 +206,62 @@
     wireCategoryBars(root);
   };
 
-  function kpi(label, value, detail, spark) {
+  function kpi(label, value, detail, spark, contexto) {
     return '<div class="kpi"><span class="lbl">' + esc(label) + '</span>' +
       '<span class="v">' + value + '</span>' +
-      '<span class="d">' + (detail || '') + '</span>' + (spark || '') + '</div>';
+      '<span class="d">' + (detail || '') + '</span>' +
+      (contexto ? '<span class="ctx">' + contexto + '</span>' : '') +
+      (spark || '') + '</div>';
+  }
+
+  // A frase de abertura do painel. Diz o que importa antes de qualquer
+  // gráfico: sobrou ou faltou dinheiro, e há algo à vista para se preocupar.
+  function resumoDoMes(mt, taxa, fc, mk) {
+    const mes = U.fmtMonth(mk, true);
+    let s;
+    if (!mt.income && !mt.expense) {
+      return 'Ainda não há movimento registrado em ' + mes + '. Importe o extrato para ver o resumo.';
+    }
+    if (mt.net > 0) {
+      s = 'Em ' + mes + ' entraram <b>' + U.money(mt.income) + '</b> e saíram <b>' +
+        U.money(mt.expense) + '</b>. Sobrou <b>' + U.money(mt.net) + '</b>' +
+        (taxa ? ', ou seja ' + U.pct(taxa, 0) + ' do que você recebeu' : '') + '.';
+    } else {
+      s = 'Em ' + mes + ' você gastou <b>' + U.money(Math.abs(mt.net)) + ' a mais</b> do que recebeu: ' +
+        'entraram ' + U.money(mt.income) + ' e saíram ' + U.money(mt.expense) + '.';
+    }
+    if (fc && fc.firstNegativeP50) {
+      s += ' <b>Atenção:</b> pelo ritmo atual o saldo fica negativo em ' +
+        U.fmtDate(fc.firstNegativeP50.date) + '.';
+    }
+    return s;
+  }
+
+  // Projeta o gasto do mês pelo ritmo até agora e compara com o mês
+  // anterior — a comparação bruta no meio do mês sempre parece boa.
+  function ritmoDoMes(gastoAtual, gastoAnterior, fracMes) {
+    if (!gastoAtual || fracMes >= 0.98) return '';
+    const projetado = gastoAtual / Math.max(fracMes, 0.1);
+    let txt = 'No ritmo atual, fecha o mês em torno de <b>' + U.money(projetado) + '</b>';
+    if (gastoAnterior > 0) {
+      const dif = (projetado - gastoAnterior) / gastoAnterior;
+      if (Math.abs(dif) >= 0.08) {
+        txt += ' — ' + U.pct(Math.abs(dif), 0) + (dif > 0 ? ' acima' : ' abaixo') + ' do mês passado';
+      }
+    }
+    return txt + '.';
+  }
+
+  // Barra com marca de referência: 20% é a folga que a maioria dos
+  // materiais de educação financeira usa como piso saudável.
+  function barraPoupanca(taxa) {
+    const alvo = 0.2;
+    const frac = Math.max(0, Math.min(1, taxa / 0.5));
+    const cor = taxa >= alvo ? 'var(--pos)' : taxa > 0 ? 'var(--warn)' : 'var(--neg)';
+    return '<span class="barra" aria-hidden="true">' +
+      '<i style="width:' + (frac * 100).toFixed(0) + '%;background:' + cor + '"></i>' +
+      '<span class="marca" style="left:' + ((alvo / 0.5) * 100).toFixed(0) + '%"></span></span>' +
+      '<span>marca de 20%</span>';
   }
 
   function cmp(now, before, inverse) {
@@ -224,7 +339,7 @@
       '<div class="row"><button class="btn" data-act="gmail">✉ Buscar no Gmail</button></div></div>' +
       '<div class="card"><h3>Onde baixar cada arquivo</h3>' +
       '<div class="scrollx"><table class="tbl">' +
-      '<thead><tr><th>Banco</th><th>Conta corrente</th><th>Fatura do cartão</th></tr></thead><tbody>' +
+      '<thead><tr><th scope="col">Banco</th><th scope="col">Conta corrente</th><th scope="col">Fatura do cartão</th></tr></thead><tbody>' +
       [['Nubank', 'App › Conta › ⋯ › Exportar extrato (OFX ou CSV)', 'App › Cartão › Faturas › Exportar (CSV)'],
       ['Itaú', 'Internet banking › Extrato › Salvar em OFX', 'Fatura › Salvar em OFX'],
       ['Bradesco', 'Extrato › Exportar › OFX (Money 2000)', 'Fatura digital › OFX'],

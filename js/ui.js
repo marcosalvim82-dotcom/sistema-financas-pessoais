@@ -43,7 +43,12 @@
   UI.toast = function (msg, kind, opts) {
     opts = opts || {};
     const old = $('.toast'); if (old) old.remove();
-    const t = U.el('div', { class: 'toast ' + (kind || ''), html: msg });
+    const t = U.el('div', {
+      class: 'toast ' + (kind || ''), html: msg,
+      // Erro interrompe a leitura; aviso comum espera a pausa.
+      role: kind === 'bad' ? 'alert' : 'status',
+      'aria-live': kind === 'bad' ? 'assertive' : 'polite'
+    });
     if (opts.persist) {
       const x = U.el('button', {
         class: 'btn sm ghost', text: '✕', title: 'Fechar',
@@ -59,23 +64,59 @@
   };
 
   UI.closeModal = function () {
-    const s = $('.scrim'); if (s) s.remove();
+    const s = $('.scrim');
+    if (!s) return;
+    const voltarPara = UI._focoAnterior;
+    s.remove();
+    document.removeEventListener('keydown', UI._teclaModal, true);
+    UI._teclaModal = null;
+    // Devolve o foco para onde estava. Sem isso, ao fechar a janela o
+    // teclado é jogado para o início da página.
+    if (voltarPara && document.contains(voltarPara)) {
+      try { voltarPara.focus(); } catch (e) { }
+    }
+    UI._focoAnterior = null;
   };
+
+  const FOCAVEIS = 'a[href],button:not([disabled]),input:not([disabled]),' +
+    'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
   UI.modal = function (html, opts) {
     opts = opts || {};
     UI.closeModal();
+    UI._focoAnterior = document.activeElement;
+
+    const idTitulo = 'mt' + U.uid();
     const scrim = U.el('div', { class: 'scrim' });
-    const modal = U.el('div', { class: 'modal ' + (opts.wide ? 'wide' : ''), html });
+    const modal = U.el('div', {
+      class: 'modal ' + (opts.wide ? 'wide' : ''),
+      role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': idTitulo,
+      html
+    });
+    const h = modal.querySelector('h2');
+    if (h) h.id = idTitulo; else modal.setAttribute('aria-label', opts.titulo || 'Janela');
+
     scrim.appendChild(modal);
     scrim.addEventListener('click', e => { if (e.target === scrim && !opts.sticky) UI.closeModal(); });
-    document.addEventListener('keydown', function onKey(e) {
-      if (e.key === 'Escape') { UI.closeModal(); document.removeEventListener('keydown', onKey); }
-    });
+
+    // Prende o Tab dentro da janela: com o fundo ainda tabulável, o
+    // usuário de teclado "sai" da janela sem perceber e fica preso.
+    UI._teclaModal = function (e) {
+      if (e.key === 'Escape' && !opts.sticky) { e.preventDefault(); UI.closeModal(); return; }
+      if (e.key !== 'Tab') return;
+      const itens = Array.from(modal.querySelectorAll(FOCAVEIS))
+        .filter(el => el.offsetParent !== null || el === document.activeElement);
+      if (!itens.length) return;
+      const primeiro = itens[0], ultimo = itens[itens.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+      else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+    };
+    document.addEventListener('keydown', UI._teclaModal, true);
+
     document.body.appendChild(scrim);
     if (opts.onMount) opts.onMount(modal);
     const f = modal.querySelector('input,select,textarea,button');
-    if (f && !opts.noFocus) f.focus();
+    if (f && !opts.noFocus) f.focus(); else modal.setAttribute('tabindex', '-1'), modal.focus();
     return modal;
   };
 
@@ -106,54 +147,88 @@
     }
     UI.state.selection.clear();
     UI.render();
-    const m = $('main'); if (m) m.scrollTop = 0;
+    const m = $('main');
+    if (m) {
+      m.scrollTop = 0;
+      // Move o foco para o conteúdo: quem navega por teclado continua
+      // de onde a tela mudou, em vez de voltar ao topo do menu.
+      if (!opts || opts.foco !== false) m.focus({ preventScroll: true });
+    }
+    const v = VIEWS.find(x => x.id === view);
+    if (v) UI.anunciar(v.label + ' carregado');
   };
 
   /* ═══════════════════════ Casca ═══════════════════════════════ */
 
-  UI.render = function () {
-    const app = $('#app');
-    const pend = ENGINE.reviewQueue().length;
+  // Anuncia mudanças para leitores de tela. Sem isto, quem não enxerga
+  // a tela não fica sabendo que a importação terminou ou que a lista
+  // foi filtrada — a página muda em silêncio.
+  UI.anunciar = function (msg) {
+    const el = $('#anuncio');
+    if (!el) return;
+    el.textContent = '';
+    setTimeout(() => { el.textContent = msg; }, 60);
+  };
 
+  function botaoNav(v, pend, mobile) {
+    const ativo = UI.state.view === v.id;
+    const badge = (v.id === 'revisar' && pend)
+      ? '<span class="badge">' + pend + '<span class="sr-only"> itens para revisar</span></span>' : '';
+    return '<button data-nav="' + v.id + '" class="' + (ativo ? 'on' : '') + '"' +
+      (ativo ? ' aria-current="page"' : '') + '>' +
+      '<span class="ico" aria-hidden="true">' + v.ico + '</span>' + v.label + badge + '</button>';
+  }
+
+  // O esqueleto é montado uma vez só. Recriar a página inteira a cada
+  // clique jogava o foco do teclado de volta ao começo e fazia o leitor
+  // de tela reler tudo — na prática, inutilizava a navegação sem mouse.
+  function montarEsqueleto(app) {
     app.innerHTML =
-      '<nav class="side">' +
-      '<div class="brand"><b>' + esc(d().settings.household || 'Minhas finanças') + '</b>' +
-      '<span>controle financeiro</span></div>' +
-      '<div class="navlist">' +
-      VIEWS.map(v => '<button data-nav="' + v.id + '" class="' + (UI.state.view === v.id ? 'on' : '') + '">' +
-        '<span class="ico">' + v.ico + '</span>' + v.label +
-        (v.id === 'revisar' && pend ? '<span class="badge">' + pend + '</span>' : '') +
-        '</button>').join('') +
-      '</div>' +
+      '<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>' +
+      '<nav class="side" aria-label="Seções do aplicativo">' +
+      '<div class="brand"><b id="nomePainel"></b>' +
+      '<span aria-hidden="true">controle financeiro</span></div>' +
+      '<div class="navlist" id="navlist"></div>' +
       '<div class="nav-foot">' +
       '<button data-act="import">＋ Importar extrato</button>' +
       '<button data-act="gmail">✉ Buscar no Gmail</button>' +
       '<button data-act="backup">↓ Backup</button>' +
-      '<button data-act="theme">◐ Tema</button>' +
-      '<span id="saveState"></span>' +
+      '<button data-act="theme">◐ Alternar tema</button>' +
+      '<span id="saveState" role="status"></span>' +
       '</div></nav>' +
-      '<main><div class="view" id="viewRoot"></div></main>' +
-      '<div class="mobilebar">' +
-      MOBILE_VIEWS.map(id => {
-        const v = VIEWS.find(x => x.id === id);
-        return '<button data-nav="' + v.id + '" class="' + (UI.state.view === v.id ? 'on' : '') + '">' +
-          '<span class="ico">' + v.ico + '</span>' + v.label +
-          (v.id === 'revisar' && pend ? '<span class="badge">' + pend + '</span>' : '') + '</button>';
-      }).join('') +
+      '<main id="conteudo" tabindex="-1"><div class="view" id="viewRoot"></div></main>' +
+      '<div class="mobilebar" id="mobilebar"></div>' +
+      '<div id="anuncio" class="sr-only" role="status" aria-live="polite"></div>';
+    app.dataset.montado = '1';
+  }
+
+  UI.render = function () {
+    const app = $('#app');
+    if (!app.dataset.montado) montarEsqueleto(app);
+
+    const pend = ENGINE.reviewQueue().length;
+    const vAtual = VIEWS.find(v => v.id === UI.state.view) || VIEWS[0];
+
+    $('#nomePainel').textContent = d().settings.household || 'Minhas finanças';
+    $('#navlist').innerHTML = VIEWS.map(v => botaoNav(v, pend)).join('');
+    $('#mobilebar').innerHTML =
+      MOBILE_VIEWS.map(id => botaoNav(VIEWS.find(x => x.id === id), pend, true)).join('') +
       '<button data-act="mais" class="' + (MOBILE_EXTRA.includes(UI.state.view) ? 'on' : '') + '">' +
-      '<span class="ico">⋯</span>Mais</button>' +
-      '</div>';
+      '<span class="ico" aria-hidden="true">⋯</span>Mais</button>';
+
+    document.title = vAtual.label + ' · Finanças';
 
     const root = $('#viewRoot');
     try {
       (UI.viewRenderers[UI.state.view] || UI.viewRenderers.painel)(root);
     } catch (e) {
       console.error(e);
-      root.innerHTML = '<div class="note bad"><b>Algo quebrou ao desenhar esta tela.</b><br>' +
+      root.innerHTML = '<div class="note bad" role="alert"><b>Algo quebrou ao desenhar esta tela.</b><br>' +
         esc(e.message) + '<br><br>Seus dados estão salvos. Recarregue a página; se persistir, ' +
         'faça um backup em Ajustes e me mande o arquivo.</div>';
     }
     UI.updateSaveState();
+    if (typeof CHARTS.ativarInteracao === 'function') CHARTS.ativarInteracao(root);
   };
 
   UI.updateSaveState = function () {

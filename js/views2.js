@@ -97,8 +97,8 @@
       const atualIdx = Math.max(0, comItens.findIndex(x => x.cycleEnd >= today));
       const sts = comItens.slice(Math.max(0, atualIdx - 5), atualIdx + 3).reverse();
       html += '<div class="scrollx"><table class="tbl"><thead><tr>' +
-        '<th>Fatura</th><th>Período</th><th>Vencimento</th><th class="n">Compras</th>' +
-        '<th class="n">Pago</th><th>Situação</th></tr></thead><tbody>' +
+        '<th scope="col">Fatura</th><th scope="col">Período</th><th scope="col">Vencimento</th><th scope="col" class="n">Compras</th>' +
+        '<th scope="col" class="n">Pago</th><th scope="col">Situação</th></tr></thead><tbody>' +
         sts.map(st => '<tr><td><b>' + U.fmtMonth(U.monthKey(st.dueDate), true) + '</b></td>' +
           '<td class="muted">' + U.fmtDate(st.cycleStart, 'short') + ' a ' + U.fmtDate(st.cycleEnd, 'short') + '</td>' +
           '<td>' + U.fmtDate(st.dueDate) + '</td>' +
@@ -285,8 +285,8 @@
     const recs = (d().recurrences || []).slice().sort((a, b) => a.nextExpected.localeCompare(b.nextExpected));
     html += '<div class="card"><h3>Contas e assinaturas detectadas automaticamente</h3>' +
       (recs.length ? '<div class="scrollx"><table class="tbl"><thead><tr>' +
-        '<th>O quê</th><th>Categoria</th><th>Frequência</th><th class="n">Valor típico</th>' +
-        '<th>Próxima</th><th>Situação</th><th></th></tr></thead><tbody>' +
+        '<th scope="col">O quê</th><th scope="col">Categoria</th><th scope="col">Frequência</th><th scope="col" class="n">Valor típico</th>' +
+        '<th scope="col">Próxima</th><th scope="col">Situação</th><th scope="col"></th></tr></thead><tbody>' +
         recs.map(r => '<tr><td><b>' + esc(r.merchantName) + '</b>' +
           (r.fixed ? ' <span class="pill">fixo</span>' : '') + '</td>' +
           '<td class="muted">' + esc(ENGINE.categoryLabel(r.categoryId)) + '</td>' +
@@ -610,8 +610,8 @@
         '</div></div>';
 
       html += '<div class="card"><h3>Posições</h3><div class="scrollx"><table class="tbl"><thead><tr>' +
-        '<th>Ativo</th><th>Classe</th><th class="n">Aportado</th><th class="n">Valor atual</th>' +
-        '<th class="n">Resultado</th><th class="n">%</th><th>Atualizado</th><th></th></tr></thead><tbody>' +
+        '<th scope="col">Ativo</th><th scope="col">Classe</th><th scope="col" class="n">Aportado</th><th scope="col" class="n">Valor atual</th>' +
+        '<th scope="col" class="n">Resultado</th><th scope="col" class="n">%</th><th scope="col">Atualizado</th><th scope="col"></th></tr></thead><tbody>' +
         pos.map(p => {
           const res = (p.currentCents || 0) - (p.investedCents || 0);
           const r = p.investedCents ? res / p.investedCents : 0;
@@ -744,8 +744,8 @@
       '</div></div>';
 
     html += '<div class="card"><h3>Evolução de 12 meses</h3>' + CHARTS.monthlyBars(series) +
-      '<div class="scrollx"><table class="tbl"><thead><tr><th>Mês</th><th class="n">Receitas</th>' +
-      '<th class="n">Despesas</th><th class="n">Resultado</th><th class="n">Taxa de poupança</th></tr></thead><tbody>' +
+      '<div class="scrollx"><table class="tbl"><thead><tr><th scope="col">Mês</th><th scope="col" class="n">Receitas</th>' +
+      '<th scope="col" class="n">Despesas</th><th scope="col" class="n">Resultado</th><th scope="col" class="n">Taxa de poupança</th></tr></thead><tbody>' +
       series.slice().reverse().map(s => '<tr><td>' + U.fmtMonth(s.month, true) + '</td>' +
         '<td class="n pos">' + U.money(s.income) + '</td>' +
         '<td class="n neg">' + U.money(s.expense) + '</td>' +
@@ -759,7 +759,7 @@
       '</tbody></table></div></div>';
 
     html += '<div class="card"><h3>Maiores gastos do mês</h3><div class="scrollx"><table class="tbl">' +
-      '<thead><tr><th>Estabelecimento</th><th>Categoria</th><th class="n">Vezes</th><th class="n">Total</th></tr></thead><tbody>' +
+      '<thead><tr><th scope="col">Estabelecimento</th><th scope="col">Categoria</th><th scope="col" class="n">Vezes</th><th scope="col" class="n">Total</th></tr></thead><tbody>' +
       tops.map(m => '<tr><td><b>' + esc(m.name) + '</b></td>' +
         '<td class="muted">' + esc(ENGINE.categoryLabel(m.categoryId)) + '</td>' +
         '<td class="n">' + m.count + '</td><td class="n neg">' + U.money(m.cents) + '</td></tr>').join('') +
@@ -854,7 +854,7 @@
 
     html += '<div class="card"><h3>Contas</h3>' +
       (data.accounts.length ? '<div class="scrollx"><table class="tbl"><thead><tr>' +
-        '<th>Nome</th><th>Instituição</th><th>Tipo</th><th class="n">Saldo</th><th>No patrimônio</th><th></th></tr></thead><tbody>' +
+        '<th scope="col">Nome</th><th scope="col">Instituição</th><th scope="col">Tipo</th><th scope="col" class="n">Saldo</th><th scope="col">No patrimônio</th><th scope="col"></th></tr></thead><tbody>' +
         data.accounts.map(a => '<tr><td><b>' + esc(a.name) + '</b>' +
           (a.status === 'provisional' ? ' <span class="pill warn">a confirmar</span>' : '') + '</td>' +
           '<td class="muted">' + esc(RULES.institutionById(a.institutionId).name) + '</td>' +
@@ -870,7 +870,7 @@
       '<div class="muted" style="font-size:.8rem">Criadas automaticamente quando você corrige algo na fila de revisão. ' +
       'Elas têm prioridade sobre qualquer inferência.</div>' +
       (data.rules.length ? '<div class="scrollx"><table class="tbl"><thead><tr>' +
-        '<th>Quando</th><th>Categoria</th><th class="n">Afeta</th><th></th></tr></thead><tbody>' +
+        '<th scope="col">Quando</th><th scope="col">Categoria</th><th scope="col" class="n">Afeta</th><th scope="col"></th></tr></thead><tbody>' +
         data.rules.map(r => '<tr><td>' + esc(ruleText(r)) + '</td>' +
           '<td>' + esc(ENGINE.categoryLabel(r.categoryId)) + '</td>' +
           '<td class="n">' + ENGINE.previewRule(r) + '</td>' +
@@ -932,7 +932,7 @@
 
     html += '<div class="card"><h3>Importações feitas</h3>' +
       (data.imports.length ? '<div class="scrollx"><table class="tbl"><thead><tr>' +
-        '<th>Arquivo</th><th>Quando</th><th>Formato</th><th class="n">Novos</th><th class="n">Duplicados</th></tr></thead><tbody>' +
+        '<th scope="col">Arquivo</th><th scope="col">Quando</th><th scope="col">Formato</th><th scope="col" class="n">Novos</th><th scope="col" class="n">Duplicados</th></tr></thead><tbody>' +
         data.imports.slice().reverse().slice(0, 30).map(i => '<tr><td>' + esc(i.filename) + '</td>' +
           '<td class="muted">' + U.fmtDate(i.date) + '</td><td class="muted">' + i.format + '</td>' +
           '<td class="n">' + i.inserted + '</td><td class="n muted">' + i.duplicates + '</td></tr>').join('') +

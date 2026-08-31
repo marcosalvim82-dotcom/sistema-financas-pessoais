@@ -287,7 +287,10 @@
 /* ══════════ Leitor de PDF: monta PDFs sintéticos e confere ══════════ */
 (function () {
   var falhas = [];
-  function exigir(nome, cond) { if (!cond) falhas.push(nome); }
+  var checados = 0;
+  // Conta as verificações: um teste que morre no meio e passa em
+  // silêncio é pior que teste nenhum, porque dá falsa segurança.
+  function exigir(nome, cond) { checados++; if (!cond) falhas.push(nome); }
 
   function escapar(s) {
     return String(s).replace(/([\\()])/g, '\\$1');
@@ -449,11 +452,157 @@
       var parcela = ENGINE.detectInstallment('MAGAZINE LUIZA PARC 03/12');
       exigir('pdf-parcela', parcela && parcela.no === 3 && parcela.total === 12);
 
+      // 7 · Extrato COM COLUNA DE SALDO. O valor certo é o penúltimo
+      //     número; pegar o último importaria o saldo como se fosse a
+      //     transação, e o erro passa despercebido.
+      var EXTRATO_SALDO = [
+        { y: 800, partes: [{ x: 40, texto: 'EXTRATO DE CONTA CORRENTE' }] },
+        { y: 770, partes: [{ x: 40, texto: 'Data' }, { x: 110, texto: 'Historico' },
+                           { x: 400, texto: 'Valor' }, { x: 490, texto: 'Saldo' }] },
+        { y: 750, partes: [{ x: 40, texto: '01/07/2026' }, { x: 110, texto: 'SALDO ANTERIOR' },
+                           { x: 490, texto: '5.000,00' }] },
+        { y: 735, partes: [{ x: 40, texto: '02/07/2026' }, { x: 110, texto: 'COMPRA CARREFOUR' },
+                           { x: 400, texto: '-235,49' }, { x: 490, texto: '4.764,51' }] },
+        { y: 720, partes: [{ x: 40, texto: '03/07/2026' }, { x: 110, texto: 'PIX ENVIADO JOAO' },
+                           { x: 400, texto: '-150,00' }, { x: 490, texto: '4.614,51' }] },
+        { y: 705, partes: [{ x: 40, texto: '05/07/2026' }, { x: 110, texto: 'PAGAMENTO DE SALARIO' },
+                           { x: 400, texto: '8.500,00' }, { x: 490, texto: '13.114,51' }] }
+      ];
+      var bufS = await gerarArquivo(montarPDF(EXTRATO_SALDO, {}));
+      var rS = await PDFTX.parse(bufS, 'extrato-conta.pdf');
+      var recS = rS.statements[0].records;
+      exigir('saldo-qtd', recS.length === 3);
+      exigir('saldo-conta-nao-cartao', rS.statements[0].kind === 'account');
+      var carref = recS.find(function (r) { return /CARREFOUR/.test(r.descriptor); });
+      exigir('saldo-valor-certo', !!carref && carref.amountCents === -23549);
+      var salario = recS.find(function (r) { return /SALARIO/.test(r.descriptor); });
+      exigir('saldo-entrada-certa', !!salario && salario.amountCents === 850000);
+      exigir('saldo-ignora-anterior',
+        !recS.some(function (r) { return /SALDO ANTERIOR/i.test(r.descriptor); }));
+
+      // 8 · Data escrita uma vez como cabeçalho do dia, transações
+      //     listadas abaixo sem repetir a data. Formato comum em app.
+      var EXTRATO_AGRUPADO = [
+        { y: 800, partes: [{ x: 40, texto: 'MOVIMENTACAO' }] },
+        { y: 770, partes: [{ x: 40, texto: '14/07/2026' }] },
+        { y: 752, partes: [{ x: 60, texto: 'MERCADO SAO JORGE' }, { x: 480, texto: '89,90' }] },
+        { y: 736, partes: [{ x: 60, texto: 'UBER *TRIP' }, { x: 480, texto: '23,40' }] },
+        { y: 706, partes: [{ x: 40, texto: '15/07/2026' }] },
+        { y: 688, partes: [{ x: 60, texto: 'NETFLIX.COM' }, { x: 480, texto: '59,90' }] }
+      ];
+      var bufG = await gerarArquivo(montarPDF(EXTRATO_AGRUPADO, {}));
+      var rG = await PDFTX.parse(bufG, 'movimentacao.pdf');
+      var recG = rG.statements[0].records;
+      exigir('agrupado-qtd', recG.length === 3);
+      exigir('agrupado-herda-data',
+        recG.filter(function (r) { return r.date === '2026-07-14'; }).length === 2);
+      exigir('agrupado-troca-data',
+        recG.filter(function (r) { return r.date === '2026-07-15'; }).length === 1);
+
+      // 9 · Descrição que quebra em duas linhas
+      var EXTRATO_QUEBRA = [
+        { y: 800, partes: [{ x: 40, texto: 'LANCAMENTOS DO PERIODO' }] },
+        { y: 770, partes: [{ x: 40, texto: '20/07/2026' }, { x: 110, texto: 'PAGAMENTO CONVENIO' },
+                           { x: 480, texto: '1.240,00' }] },
+        { y: 756, partes: [{ x: 110, texto: 'PREFEITURA MUNICIPAL IPTU' }] },
+        { y: 730, partes: [{ x: 40, texto: '21/07/2026' }, { x: 110, texto: 'FARMACIA' },
+                           { x: 480, texto: '45,00' }] }
+      ];
+      var bufQ = await gerarArquivo(montarPDF(EXTRATO_QUEBRA, {}));
+      var rQ = await PDFTX.parse(bufQ, 'lancamentos.pdf');
+      var recQ = rQ.statements[0].records;
+      exigir('quebra-qtd', recQ.length === 2);
+      exigir('quebra-juntou-descricao',
+        !!recQ[0] && /CONVENIO/.test(recQ[0].descriptor) && /IPTU/.test(recQ[0].descriptor));
+
+      // 10 · Sinal vindo do sufixo D/C, sem menos no número
+      var EXTRATO_DC = [
+        { y: 800, partes: [{ x: 40, texto: 'EXTRATO' }] },
+        { y: 770, partes: [{ x: 40, texto: '10/07/2026' }, { x: 110, texto: 'TARIFA MENSALIDADE' },
+                           { x: 460, texto: '34,90 D' }] },
+        { y: 750, partes: [{ x: 40, texto: '11/07/2026' }, { x: 110, texto: 'DEPOSITO EM DINHEIRO' },
+                           { x: 460, texto: '500,00 C' }] }
+      ];
+      var bufD = await gerarArquivo(montarPDF(EXTRATO_DC, {}));
+      var rD = await PDFTX.parse(bufD, 'extrato-dc.pdf');
+      var recD = rD.statements[0].records;
+      exigir('dc-qtd', recD.length === 2);
+      exigir('dc-debito-negativo',
+        !!recD[0] && recD[0].amountCents === -3490);
+      exigir('dc-credito-positivo',
+        !!recD[1] && recD[1].amountCents === 50000);
+
     } catch (e) {
       falhas.push('excecao:' + (e && e.message ? e.message.slice(0, 60) : e));
     }
 
-    var linha3 = (falhas.length ? 'FALHOU [' + falhas.join(' | ') + ']' : 'OK') + ' :: pdf';
+    // Se o bloco morreu antes do fim, o número de verificações cai —
+    // e isso vira falha explícita em vez de um "OK" enganoso.
+    var ESPERADO = 29;
+    if (checados < ESPERADO) {
+      falhas.push('so-rodou-' + checados + '-de-' + ESPERADO + '-verificacoes');
+    }
+    /* ══════════ Acessibilidade das telas renderizadas ══════════ */
+    // Uma regressão de acessibilidade não aparece na tela: some em
+    // silêncio e só quem depende dela descobre. Por isso vira teste.
+    var a11y = [];
+    try {
+      var app = document.getElementById('app');
+
+      UI.state.view = 'painel';
+      UI.render();
+
+      if (!app.querySelector('.skip-link')) a11y.push('sem-link-pular-conteudo');
+      if (!document.getElementById('anuncio')) a11y.push('sem-regiao-de-anuncio');
+
+      var nav = app.querySelector('nav.side');
+      if (!nav || !nav.getAttribute('aria-label')) a11y.push('nav-sem-nome');
+
+      var main = app.querySelector('main');
+      if (!main || main.tabIndex !== -1) a11y.push('main-nao-focavel');
+
+      if (!app.querySelector('[aria-current="page"]')) a11y.push('sem-item-de-menu-atual');
+
+      // Todo gráfico precisa de nome acessível e de saída em tabela.
+      var svgs = app.querySelectorAll('svg.chart:not([aria-hidden])');
+      for (var i = 0; i < svgs.length; i++) {
+        if (!svgs[i].getAttribute('aria-labelledby')) { a11y.push('grafico-sem-nome'); break; }
+      }
+      if (svgs.length && !app.querySelector('details.chart-dados')) {
+        a11y.push('grafico-sem-tabela-alternativa');
+      }
+
+      // Nenhum controle pode ficar sem rótulo legível.
+      var semNome = 0;
+      app.querySelectorAll('button,input,select').forEach(function (el) {
+        var temTexto = (el.textContent || '').trim().length > 0;
+        var temAria = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
+        var temLabelPai = el.closest('label');
+        if (!temTexto && !temAria && !temLabelPai) semNome++;
+      });
+      if (semNome) a11y.push('controles-sem-rotulo:' + semNome);
+
+      // A tela de lançamentos é a de maior tráfego: idem.
+      UI.state.view = 'transacoes';
+      UI.render();
+      var caixas = app.querySelectorAll('input[type=checkbox][data-selecttx]');
+      if (caixas.length && !caixas[0].getAttribute('aria-label')) {
+        a11y.push('selecao-sem-rotulo');
+      }
+      var acoes = app.querySelectorAll('[data-act=editcat]');
+      if (acoes.length && !acoes[0].getAttribute('aria-label')) {
+        a11y.push('acao-de-linha-sem-contexto');
+      }
+
+      UI.state.view = 'painel';
+      UI.render();
+    } catch (e) {
+      a11y.push('a11y-excecao:' + (e && e.message ? e.message.slice(0, 40) : e));
+    }
+    falhas = falhas.concat(a11y);
+
+    var linha3 = (falhas.length ? 'FALHOU [' + falhas.join(' | ') + ']' : 'OK') +
+      ' :: pdf ' + checados + ' verificacoes · acessibilidade ok';
     var el = document.createElement('pre');
     el.id = 'r3';
     el.textContent = linha3;
