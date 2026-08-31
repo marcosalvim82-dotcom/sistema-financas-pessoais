@@ -932,11 +932,24 @@
 
     html += '<div class="card"><h3>Importações feitas</h3>' +
       (data.imports.length ? '<div class="scrollx"><table class="tbl"><thead><tr>' +
-        '<th scope="col">Arquivo</th><th scope="col">Quando</th><th scope="col">Formato</th><th scope="col" class="n">Novos</th><th scope="col" class="n">Duplicados</th></tr></thead><tbody>' +
-        data.imports.slice().reverse().slice(0, 30).map(i => '<tr><td>' + esc(i.filename) + '</td>' +
-          '<td class="muted">' + U.fmtDate(i.date) + '</td><td class="muted">' + i.format + '</td>' +
-          '<td class="n">' + i.inserted + '</td><td class="n muted">' + i.duplicates + '</td></tr>').join('') +
-        '</tbody></table></div>'
+        '<th scope="col">Arquivo</th><th scope="col">Quando</th><th scope="col">Formato</th>' +
+        '<th scope="col" class="n">Novos</th><th scope="col" class="n">Ainda no sistema</th>' +
+        '<th scope="col"></th></tr></thead><tbody>' +
+        data.imports.slice().reverse().slice(0, 30).map(i => {
+          const vivos = data.transactions.filter(t => t.importId === i.id).length;
+          return '<tr><td>' + esc(i.filename) + '</td>' +
+            '<td class="muted">' + U.fmtDate(i.date) + '</td><td class="muted">' + i.format + '</td>' +
+            '<td class="n">' + i.inserted + '</td>' +
+            '<td class="n' + (vivos ? '' : ' muted') + '">' + vivos + '</td>' +
+            '<td>' + (vivos
+              ? '<button class="btn sm danger" data-act="desfazerimport" data-id="' + i.id + '" ' +
+              'aria-label="Desfazer importação de ' + esc(i.filename) + '">desfazer</button>'
+              : '') + '</td></tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+        '<div class="muted" style="font-size:.78rem">Desfazer remove só os lançamentos daquele ' +
+        'arquivo, deixando o resto intacto. Útil quando um extrato entra com os valores errados: ' +
+        'desfaça, corrija e importe de novo.</div>'
         : '<div class="empty-chart">Nenhuma importação registrada.</div>') + '</div>';
 
     root.innerHTML = html;
@@ -1059,6 +1072,41 @@
         DB.save(); UI.render();
         UI.toast('Credencial removida.');
       }, 'Remover');
+  };
+
+  UI.actions.desfazerimport = function (el) {
+    const data = d();
+    const imp = data.imports.find(i => i.id === el.dataset.id);
+    if (!imp) return;
+    const alvos = data.transactions.filter(t => t.importId === imp.id);
+    const corrigidos = alvos.filter(t => t.categorySource === 'user').length;
+
+    UI.confirm('Desfazer esta importação?',
+      'Vou remover os <b>' + alvos.length + ' lançamentos</b> que vieram de <b>' +
+      esc(imp.filename) + '</b>. O resto do sistema não é tocado.' +
+      (corrigidos ? '<br><br><b>Atenção:</b> ' + corrigidos + ' desses você já categorizou à mão. ' +
+        'Essas correções serão perdidas — mas o que o sistema aprendeu com elas continua valendo ' +
+        'para as próximas importações.' : '') +
+      '<br><br>Depois é só importar o arquivo de novo.',
+      () => {
+        const ids = new Set(alvos.map(t => t.id));
+        data.transactions = data.transactions.filter(t => !ids.has(t.id));
+        // Planos de parcelamento que ficaram sem nenhuma parcela.
+        data.installmentPlans = data.installmentPlans.filter(p =>
+          data.transactions.some(t => t.installmentPlanId === p.id));
+        data.links = (data.links || []).filter(l =>
+          !ids.has(l.aId) && !ids.has(l.bId));
+        // Tira o arquivo do histórico para que possa ser reimportado:
+        // a proteção contra arquivo repetido bloquearia a segunda vez.
+        data.imports = data.imports.filter(i => i.id !== imp.id);
+
+        ENGINE.linkTransfers();
+        ENGINE.detectRecurrences();
+        ENGINE.recomputeCardCycles();
+        DB.save();
+        UI.toast(alvos.length + ' lançamentos removidos. Pode importar o arquivo de novo.', 'good');
+        UI.render();
+      }, 'Remover ' + alvos.length + ' lançamentos');
   };
 
   UI.actions.wipe = function () {

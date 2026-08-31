@@ -390,6 +390,25 @@
         records.forEach(r => { r.amountCents = -r.amountCents; });
         warnings.push('Arquivo identificado como fatura de cartão: os valores foram lidos como despesas.');
       }
+    } else if (records.length > 1 && records.every(r => r.amountCents > 0)) {
+      // Extrato de conta sem nenhum valor negativo: o arquivo não marca
+      // o sinal. Deduz pela descrição — deixar tudo como receita faria
+      // o painel inteiro mentir, e em silêncio.
+      let deduzidos = 0;
+      records.forEach(r => {
+        if (RULES.direcaoPorDescricao(r.descriptor) < 0) {
+          r.amountCents = -Math.abs(r.amountCents);
+          deduzidos++;
+        }
+      });
+      if (deduzidos) {
+        warnings.push('Este arquivo não marca o sinal dos valores. Deduzi pela descrição que ' +
+          deduzidos + ' lançamento(s) são saídas. <b>Confira se entradas e saídas ficaram ' +
+          'trocadas no painel.</b>');
+      } else {
+        warnings.push('<b>Atenção:</b> todos os lançamentos entraram como receita, o que é ' +
+          'improvável num extrato de conta. Confira antes de confiar nos números.');
+      }
     }
 
     const dates = records.map(r => r.date).sort();

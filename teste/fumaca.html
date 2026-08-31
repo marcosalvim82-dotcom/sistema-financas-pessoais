@@ -515,7 +515,55 @@
       exigir('quebra-juntou-descricao',
         !!recQ[0] && /CONVENIO/.test(recQ[0].descriptor) && /IPTU/.test(recQ[0].descriptor));
 
-      // 10 · Sinal vindo do sufixo D/C, sem menos no número
+      // 10-A · Extrato de conta com valores SEM SINAL e coluna de saldo.
+      //        Muitos bancos não escrevem o menos: a saída se reconhece
+      //        porque o saldo cai. Sem isso, gasto entra como receita e
+      //        o painel inteiro passa a mentir.
+      var SEM_SINAL = [
+        { y: 800, partes: [{ x: 40, texto: 'EXTRATO DE CONTA CORRENTE' }] },
+        { y: 775, partes: [{ x: 40, texto: 'Data' }, { x: 110, texto: 'Historico' },
+                           { x: 400, texto: 'Valor' }, { x: 490, texto: 'Saldo' }] },
+        { y: 755, partes: [{ x: 40, texto: '01/07/2026' }, { x: 110, texto: 'SALDO ANTERIOR' },
+                           { x: 490, texto: '5.000,00' }] },
+        { y: 738, partes: [{ x: 40, texto: '02/07/2026' }, { x: 110, texto: 'COMPRA CARREFOUR' },
+                           { x: 400, texto: '235,49' }, { x: 490, texto: '4.764,51' }] },
+        { y: 721, partes: [{ x: 40, texto: '03/07/2026' }, { x: 110, texto: 'PIX ENVIADO JOAO' },
+                           { x: 400, texto: '150,00' }, { x: 490, texto: '4.614,51' }] },
+        { y: 704, partes: [{ x: 40, texto: '05/07/2026' }, { x: 110, texto: 'PAGAMENTO SALARIO' },
+                           { x: 400, texto: '8.500,00' }, { x: 490, texto: '13.114,51' }] }
+      ];
+      var bufN = await gerarArquivo(montarPDF(SEM_SINAL, {}));
+      var rN = await PDFTX.parse(bufN, 'extrato-sem-sinal.pdf');
+      var recN = rN.statements[0].records;
+      exigir('semsinal-qtd', recN.length === 3);
+      var cN = recN.find(function (r) { return /CARREFOUR/.test(r.descriptor); });
+      exigir('semsinal-compra-negativa', !!cN && cN.amountCents === -23549);
+      var pN = recN.find(function (r) { return /PIX ENVIADO/.test(r.descriptor); });
+      exigir('semsinal-pix-negativo', !!pN && pN.amountCents === -15000);
+      var sN = recN.find(function (r) { return /SALARIO/.test(r.descriptor); });
+      exigir('semsinal-salario-positivo', !!sN && sN.amountCents === 850000);
+
+      // 10-B · Sem coluna de saldo e sem sinal: resta a descrição.
+      var SEM_SALDO = [
+        { y: 800, partes: [{ x: 40, texto: 'MOVIMENTACAO DA CONTA' }] },
+        { y: 770, partes: [{ x: 40, texto: '10/07/2026' }, { x: 110, texto: 'SAQUE BANCO24HORAS' },
+                           { x: 470, texto: '200,00' }] },
+        { y: 752, partes: [{ x: 40, texto: '11/07/2026' }, { x: 110, texto: 'DEPOSITO EM DINHEIRO' },
+                           { x: 470, texto: '500,00' }] },
+        { y: 734, partes: [{ x: 40, texto: '12/07/2026' }, { x: 110, texto: 'COMPRA CARTAO MERCADO' },
+                           { x: 470, texto: '89,90' }] }
+      ];
+      var bufSS = await gerarArquivo(montarPDF(SEM_SALDO, {}));
+      var rSS = await PDFTX.parse(bufSS, 'movimentacao-conta.pdf');
+      var recSS = rSS.statements[0].records;
+      exigir('semsaldo-saque-negativo',
+        !!recSS[0] && recSS[0].amountCents === -20000);
+      exigir('semsaldo-deposito-positivo',
+        !!recSS[1] && recSS[1].amountCents === 50000);
+      exigir('semsaldo-compra-negativa',
+        !!recSS[2] && recSS[2].amountCents === -8990);
+
+      // 11 · Sinal vindo do sufixo D/C, sem menos no número
       var EXTRATO_DC = [
         { y: 800, partes: [{ x: 40, texto: 'EXTRATO' }] },
         { y: 770, partes: [{ x: 40, texto: '10/07/2026' }, { x: 110, texto: 'TARIFA MENSALIDADE' },

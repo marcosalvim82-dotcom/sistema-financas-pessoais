@@ -308,6 +308,42 @@
     S(['DOACAO', 'DIZIMO', 'OFERTA', 'IGREJA', 'ONG '], 'outros.doacoes')
   ];
 
+  /* ── Direção do dinheiro a partir do descritor ───────────────── */
+
+  // Muitos extratos listam os valores sem sinal: a saída se distingue
+  // pela coluna, pelo sufixo D/C ou pela queda do saldo. Quando nenhum
+  // desses existe, resta o texto. Devolve -1 (saiu), 1 (entrou) ou 0.
+  const SAIDA = [
+    'SAQUE', 'COMPRA', 'PAGAMENTO', 'PAGTO', 'DEBITO', 'TARIFA', 'ANUIDADE',
+    'IOF', 'JUROS', 'MULTA', 'ENCARGO', 'BOLETO', 'FATURA', 'APLICACAO',
+    'MENSALIDADE', 'ALUGUEL', 'CONDOMINIO', 'COMPENSADO', 'TRANSFERENCIA ENVIADA',
+    'CHEQUE', 'RESGATE PROGRAMADO', 'DEB AUTOM', 'COBRANCA', 'CONVENIO',
+    'RECARGA', 'SEGURO', 'CONSORCIO', 'EMPRESTIMO', 'FINANCIAMENTO'
+  ];
+  const ENTRADA = [
+    'DEPOSITO', 'CREDITO', 'SALARIO', 'PROVENTO', 'RENDIMENTO', 'ESTORNO',
+    'DEVOLUCAO', 'REEMBOLSO', 'RESGATE', 'CASHBACK', 'DIVIDENDO', 'JCP',
+    'TRANSFERENCIA RECEBIDA', 'REMUNERACAO', 'RESTITUICAO', 'PREMIO',
+    'VENDA', 'RECEBIMENTO'
+  ];
+
+  R.direcaoPorDescricao = function (norm) {
+    if (!norm) return 0;
+    const s = U.stripAccents(String(norm)).toUpperCase();
+
+    // A direção explícita vence qualquer outra pista: "PIX ENVIADO" e
+    // "PIX RECEBIDO" compartilham a palavra PIX e sentidos opostos.
+    if (/\bRECEBID[OA]\b|\bENTRADA\b/.test(s)) return 1;
+    if (/\bENVIAD[OA]\b|\bSAIDA\b|\bPAGO\b/.test(s)) return -1;
+
+    let melhorSaida = 0, melhorEntrada = 0;
+    SAIDA.forEach(t => { if (s.includes(t) && t.length > melhorSaida) melhorSaida = t.length; });
+    ENTRADA.forEach(t => { if (s.includes(t) && t.length > melhorEntrada) melhorEntrada = t.length; });
+    if (melhorSaida > melhorEntrada) return -1;
+    if (melhorEntrada > melhorSaida) return 1;
+    return 0;
+  };
+
   /* ── Meio de pagamento a partir do descritor ─────────────────── */
   R.detectMethod = function (norm) {
     if (/\bPIX\b/.test(norm)) return 'pix';

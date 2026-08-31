@@ -155,6 +155,20 @@
     let dataCorrente = null;
     let ultimo = null;
 
+    // Saldo de abertura: a linha "SALDO ANTERIOR" é descartada como
+    // ruído, mas o número dela é a âncora que dá sinal ao primeiro
+    // lançamento. Sem ele, a primeira linha fica sem referência.
+    let saldoAnterior = null;
+    if (colunaSaldo === 'ultima') {
+      for (const r of regs) {
+        if (r.valores.length === 1 &&
+          /saldo\s+(anterior|inicial|em)/i.test(U.stripAccents(r.texto))) {
+          saldoAnterior = U.parseMoney(r.valores[0].texto);
+          break;
+        }
+      }
+    }
+
     regs.forEach(reg => {
       if (reg.ruido) { ultimo = null; return; }
 
@@ -195,17 +209,45 @@
         .trim();
       if (!desc || desc.length < 2) { naoLidas.push(reg.texto); ultimo = null; return; }
 
-      // Sufixo D/C do extrato tradicional define o sinal.
       let valor = cents;
       const bruto = reg.valores[reg.valores.length - (colunaSaldo === 'ultima' ? 2 : 1)].texto;
+
+      // 1ª fonte de sinal: sufixo D/C do extrato tradicional.
       if (/\bD$|\bDB$/i.test(bruto.trim())) valor = -Math.abs(cents);
       else if (/\bC$|\bCR$/i.test(bruto.trim())) valor = Math.abs(cents);
+      else if (colunaSaldo === 'ultima') {
+        // 2ª fonte, e a mais confiável: a variação do saldo. É a
+        // aritmética do próprio banco — se o saldo caiu, saiu dinheiro,
+        // não importa como o valor foi impresso.
+        const saldo = U.parseMoney(reg.valores[reg.valores.length - 1].texto);
+        if (saldo !== null && saldoAnterior !== null) {
+          const delta = saldo - saldoAnterior;
+          if (Math.abs(Math.abs(delta) - Math.abs(cents)) <= 1) valor = delta;
+        }
+        if (saldo !== null) saldoAnterior = saldo;
+      }
 
-      saida.push({ date: data, amountCents: valor, descriptor: desc, externalId: null, type: '' });
+      saida.push({
+        date: data, amountCents: valor, descriptor: desc,
+        externalId: null, type: '', _semSinalExplicito: !/[-+]|\b[DC]$/i.test(bruto.trim())
+      });
       ultimo = { reg, descX: reg.descX };
     });
 
-    return { registros: saida, naoLidas, colunaSaldo };
+    // 3ª fonte: quando nada acima deu sinal e tudo saiu positivo, o
+    // texto é a única pista. Só entra aqui se o documento inteiro está
+    // sem sinal — nunca para contrariar um sinal que o banco imprimiu.
+    let inferidoPorTexto = 0;
+    const todosPositivos = saida.length > 1 && saida.every(r => r.amountCents > 0);
+    if (todosPositivos) {
+      saida.forEach(r => {
+        const dir = RULES.direcaoPorDescricao(r.descriptor);
+        if (dir < 0) { r.amountCents = -Math.abs(r.amountCents); inferidoPorTexto++; }
+      });
+    }
+    saida.forEach(r => { delete r._semSinalExplicito; });
+
+    return { registros: saida, naoLidas, colunaSaldo, inferidoPorTexto, todosPositivos };
   };
 
   /* ═══════════════ Contexto do documento ═══════════════════════ */
@@ -255,7 +297,8 @@
     const textoCompleto = linhas.map(l => l.texto).join('\n');
 
     const ano = T.detectarAno(textoCompleto);
-    const { registros, naoLidas, colunaSaldo } = T.montar(linhas, ano);
+    const { registros, naoLidas, colunaSaldo, inferidoPorTexto, todosPositivos } =
+      T.montar(linhas, ano);
 
     const ehCartao = RULES.looksLikeCardFile(textoCompleto, filename);
     const avisos = [];
@@ -269,7 +312,19 @@
     }
 
     if (colunaSaldo) {
-      avisos.push('O extrato tem coluna de saldo; usei a coluna anterior como valor do lançamento.');
+      avisos.push('O extrato tem coluna de saldo; usei a coluna anterior como valor do lançamento ' +
+        'e a variação do saldo para saber o que entrou e o que saiu.');
+    }
+    if (inferidoPorTexto) {
+      avisos.push('Este documento não marca o sinal dos valores. Deduzi pela descrição que ' +
+        inferidoPorTexto + ' lançamento(s) são saídas. <b>Confira no painel se entradas e saídas ' +
+        'ficaram trocadas</b> — se ficaram, me avise.');
+    }
+    // Extrato de conta em que nada é saída quase sempre é sinal perdido.
+    if (!ehCartao && registros.length > 2 && registros.every(r => r.amountCents > 0)) {
+      avisos.push('<b>Atenção:</b> todos os ' + registros.length + ' lançamentos entraram como receita. ' +
+        'Isso é improvável num extrato de conta e provavelmente significa que não consegui ' +
+        'identificar o sinal. Confira antes de confiar nos números.');
     }
 
     if (!registros.length) {
