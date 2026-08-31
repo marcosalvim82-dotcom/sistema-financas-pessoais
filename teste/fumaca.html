@@ -121,6 +121,56 @@
     exigir('csv-saldo', c.statements[0].balanceCents === 436230);
   } catch (e) { falhas.push('leitura:' + e.message); }
 
+  /* ── CSV do Banco Inter: preâmbulo e duas colunas de descrição ──
+     Layout real do Inter, com dados inventados. O Histórico traz o
+     tipo e a Descrição traz o estabelecimento; usar só a primeira faz
+     todo lançamento virar "Compra no débito", sem comerciante algum. */
+  try {
+    var inter = [
+      ' Extrato Conta Corrente ',
+      'Conta ;123456789',
+      'Período ;30/07/2026 a 30/08/2026',
+      'Saldo ;1.215,30',
+      '',
+      'Data Lançamento;Histórico;Descrição;Valor;Saldo',
+      '29/08/2026;Pix enviado ;Fulano De Tal Silva;-37,00;1.215,30',
+      '28/08/2026;Compra no débito;Padaria Central       Belo Horizont Bra;-22,00;1.252,30',
+      '27/08/2026;Compra no débito;;-5,80;1.274,30',
+      '26/08/2026;Pix recebido;Empresa Exemplo Ltda;225,00;1.280,10',
+      '24/08/2026;Pagamento efetuado;Pagamento Fatura - NOME DO TITULAR;-835,27;1.055,10',
+      '19/08/2026;Transferência enviada;NOME DO TITULAR;-800,00;255,10'
+    ].join('\r\n');
+
+    var ci = PARSE.parseCSV(inter, 'Extrato-30-07-2026-a-30-08-2026-CSV.csv');
+    var ri = ci.statements[0] ? ci.statements[0].records : [];
+    exigir('inter-qtd', ri.length === 6);
+    exigir('inter-ignora-preambulo',
+      !ri.some(function (r) { return /Conta|Per[íi]odo/.test(r.descriptor); }));
+
+    // O nome do estabelecimento não pode se perder.
+    var pix = ri.find(function (r) { return /Fulano/.test(r.descriptor); });
+    exigir('inter-mantem-contraparte', !!pix && pix.amountCents === -3700);
+
+    var pad = ri.find(function (r) { return /Padaria/.test(r.descriptor); });
+    exigir('inter-mantem-estabelecimento', !!pad);
+
+    // Linha sem Descrição ainda precisa virar lançamento.
+    var semDesc = ri.find(function (r) { return r.amountCents === -580; });
+    exigir('inter-linha-sem-descricao', !!semDesc && /d[ée]bito/i.test(semDesc.descriptor));
+
+    // O comerciante precisa sair limpo, sem o tipo colado na frente.
+    var chavePad = U.merchantKey(U.merchantSource(U.normalizeDescriptor(pad ? pad.descriptor : '')));
+    exigir('inter-comerciante-limpo', chavePad.indexOf('COMPRA') < 0 && /PADARIA/.test(chavePad));
+
+    var chavePix = U.merchantKey(U.merchantSource(U.normalizeDescriptor(pix ? pix.descriptor : '')));
+    exigir('inter-pix-contraparte', /FULANO/.test(chavePix));
+
+    // Saldo: as linhas vêm da mais nova para a mais antiga, então o
+    // saldo válido é o da data mais recente, não o da última linha.
+    exigir('inter-saldo-mais-recente', ci.statements[0].balanceCents === 121530);
+    exigir('inter-instituicao', ci.institution && ci.institution.id === 'inter');
+  } catch (e) { falhas.push('inter:' + e.message); }
+
   /* ── Bloco 3: geração de XLSX ────────────────────────────────── */
   try {
     var blob = XLSXOUT.build([{ name: 'T', rows: [['a', 'b'], ['x', 1.5]] }]);

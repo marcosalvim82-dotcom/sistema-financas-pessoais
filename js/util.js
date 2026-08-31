@@ -282,7 +282,11 @@
 
   // Ruído de meio de pagamento que vem antes do nome real do
   // estabelecimento em extratos brasileiros.
-  const RUIDO_INICIAL = /^(PAGAMENTO\s+(DE\s+)?(BOLETO|TITULO|CONTA|FATURA(?!\s*CARTAO))|PAGTO\s+(BOLETO|CONTA)|DEBITO\s+AUTOMATICO(\s+DE)?|DEB\s+AUTOM(ATICO)?|COMPRA\s+(COM\s+)?CARTAO(\s+DE)?(\s+DEBITO|\s+CREDITO)?|COMPRA\s+DEBITO|COMPRA|LIQUIDACAO\s+(DE\s+)?(BOLETO|TITULO)|RECEBIMENTO\s+(DE\s+)?|CREDITO\s+(DE\s+)?|TRANSFERENCIA\s+(PARA|DE)?|BOLETO\s+DE?)\s+/;
+  // O \s* final, em vez de \s+, é proposital: quando o descritor é só o
+  // tipo do lançamento ("Compra no débito", sem estabelecimento), tudo
+  // é removido e merchantSource devolve o texto original inteiro — o
+  // que dá um rótulo legível em vez do fragmento "No Debito".
+  const RUIDO_INICIAL = /^(PAGAMENTO\s+(DE\s+)?(BOLETO|TITULO|CONTA|FATURA(?!\s*CARTAO))|PAGAMENTO\s+EFETUADO|PAGTO\s+(BOLETO|CONTA)|DEBITO\s+AUTOMATICO(\s+DE)?|DEB\s+AUTOM(ATICO)?|COMPRA\s+(NO|COM|NA)\s+(DEBITO|CREDITO|CARTAO)|COMPRA\s+(COM\s+)?CARTAO(\s+DE)?(\s+DEBITO|\s+CREDITO)?|COMPRA\s+DEBITO|COMPRA|LIQUIDACAO\s+(DE\s+)?(BOLETO|TITULO)|RECEBIMENTO\s+(DE\s+)?|CREDITO\s+(DE\s+)?|TRANSFERENCIA\s+(ENVIADA|RECEBIDA|PARA|DE)?|BOLETO\s+DE?)\b\s*/;
 
   U.merchantSource = function (norm) {
     if (!norm) return '';

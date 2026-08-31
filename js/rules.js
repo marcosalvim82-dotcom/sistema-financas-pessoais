@@ -136,7 +136,16 @@
       'COMIDA', 'SELF SERVICE', 'BUFFET'], 'alimentacao.restaurante'),
     S(['STARBUCKS', 'CAFETERIA', 'CAFE ', 'COFFEE', 'THE COFFEE', 'KOPENHAGEN',
       'CACAU SHOW', 'BRIGADEIRO'], 'alimentacao.cafeteria'),
-    S(['PADARIA', 'PANIFICADORA', 'PAO ', 'CONFEITARIA'], 'alimentacao.padaria'),
+    S(['PADARIA', 'PANIFICADORA', 'PANIF', 'CONFEITARIA', 'PAO DE QUEIJO',
+      'PAO D QUEIJO', 'PAO DE ACUCAR NAO'], 'alimentacao.padaria'),
+    // Termos genéricos que aparecem em quase todo extrato brasileiro e
+    // valem mais que qualquer marca específica: a maioria dos pequenos
+    // estabelecimentos se identifica assim.
+    S(['LANCHE', 'LANCHONETE', 'PASTELARIA', 'SALGADERIA',
+      'HAMBURGUERIA', 'HOT DOG', 'DOGAO'], 'alimentacao.lanche'),
+    S(['SORVETERIA', 'ACAI', 'GELATERIA', 'DOCERIA', 'CHOCOLATERIA'], 'alimentacao.lanche'),
+    S(['A GRANEL', 'GRANEL', 'HORTIFRUT', 'QUITANDA'], 'alimentacao.supermercado'),
+    S(['BOTEQUIM', 'ESPETINHO', 'PETISCARIA'], 'lazer.bares'),
     S(['ACOUGUE', 'CASA DE CARNES', 'FRIGORIFICO'], 'alimentacao.acougue'),
     S(['HORTIFRUTI', 'SACOLAO', 'FEIRA LIVRE', 'QUITANDA', 'EMPORIO'], 'alimentacao.feira'),
 
@@ -174,6 +183,9 @@
     S(['AIRBNB', 'BOOKING', 'HOTEL', 'POUSADA', 'HOSTEL', 'RESORT', 'HOTEIS'], 'lazer.hospedagem'),
 
     /* Farmácia e saúde */
+    // "Araujo Loja" é a Drogaria Araújo, rede grande em Minas. O nome
+    // sozinho é sobrenome comum demais para virar regra.
+    S(['ARAUJO LOJA', 'DROGARIA ARAUJO'], 'saude.farmacia', { p: 60 }),
     S(['DROGARIA', 'DROGASIL', 'RAIA', 'PACHECO', 'PAGUE MENOS', 'FARMACIA',
       'ULTRAFARMA', 'PANVEL', 'NISSEI', 'VENANCIO', 'EXTRAFARMA', 'DROGA RAIA'], 'saude.farmacia'),
     S(['UNIMED', 'AMIL', 'BRADESCO SAUDE', 'SULAMERICA SAUDE', 'HAPVIDA', 'NOTREDAME',
@@ -447,6 +459,38 @@
         });
       });
       if (best) return best;
+    }
+    return null;
+  };
+
+  /* ── Reconhecimento pelo formato do arquivo ──────────────────── */
+
+  // Alguns bancos não escrevem o próprio nome no arquivo exportado —
+  // o extrato do Inter não contém "Inter" em lugar nenhum. Nesses
+  // casos o layout é a assinatura: a combinação exata de colunas é
+  // característica de cada emissor.
+  R.LAYOUTS = [
+    {
+      id: 'inter',
+      teste: t => /DATA LANCAMENTO;HISTORICO;DESCRICAO;VALOR;SALDO/.test(t) ||
+        (/EXTRATO CONTA CORRENTE/.test(t) && /\bCONTA\s*;/.test(t) && /\bPERIODO\s*;/.test(t))
+    },
+    {
+      id: 'nubank',
+      teste: t => /^DATE,CATEGORY,TITLE,AMOUNT/m.test(t) ||
+        /DATA,VALOR,IDENTIFICADOR,DESCRICAO/.test(t)
+    },
+    {
+      id: 'c6',
+      teste: t => /DATA DE COMPRA;NOME NO CARTAO;FINAL DO CARTAO/.test(t)
+    }
+  ];
+
+  R.detectInstitutionByLayout = function (texto) {
+    if (!texto) return null;
+    const t = U.stripAccents(String(texto).slice(0, 4000)).toUpperCase();
+    for (const l of R.LAYOUTS) {
+      try { if (l.teste(t)) return R.institutionById(l.id); } catch (e) { }
     }
     return null;
   };

@@ -259,11 +259,20 @@
     let best = -1, bestScore = 0, bestMap = null;
     const limit = Math.min(rows.length, 30);
     for (let i = 0; i < limit; i++) {
-      const map = {};
+      const map = { descCols: [] };
       let score = 0;
       rows[i].forEach((cell, j) => {
         const role = headerRole(cell);
-        if (role && !(role in map)) { map[role] = j; score++; }
+        if (!role) return;
+        // Vários bancos separam o tipo do lançamento do nome de quem
+        // recebeu — o Inter usa "Histórico" e "Descrição". Ficar só com
+        // a primeira faz todo lançamento virar "Compra no débito".
+        if (role === 'desc') {
+          map.descCols.push(j);
+          if (!('desc' in map)) { map.desc = j; score++; }
+          return;
+        }
+        if (!(role in map)) { map[role] = j; score++; }
       });
       const hasDate = 'date' in map;
       const hasValue = ('amount' in map) || ('debit' in map) || ('credit' in map);
@@ -312,7 +321,18 @@
     const rows = P.parseCSVText(text, delim);
     if (!rows.length) return { format: 'csv', institution: null, statements: [], warnings: ['Arquivo vazio.'] };
 
+    // Vários bancos abrem o arquivo com um preâmbulo declarando o saldo
+    // atual — é a informação mais confiável que existe sobre o saldo,
+    // melhor que deduzir da coluna linha a linha.
+    let saldoDeclarado = null;
     const hdr = findHeader(rows);
+    rows.slice(0, hdr ? hdr.index : 6).forEach(linha => {
+      if (linha.length < 2) return;
+      if (!/^saldo\b/i.test(U.stripAccents(String(linha[0] || '')).trim())) return;
+      const v = U.parseMoney(linha[1]);
+      if (v !== null) saldoDeclarado = v;
+    });
+
     let map, dataRows;
     if (hdr) {
       map = hdr.map;
@@ -357,12 +377,23 @@
       }
       if (amount === null) return;
 
-      const desc = ('desc' in map ? r[map.desc] : '') ||
+      // Junta todas as colunas de descrição na ordem em que aparecem:
+      // "Pix enviado" + "Fulano de Tal" vira uma frase que o motor sabe
+      // desmontar depois em meio de pagamento e contraparte.
+      const cols = (map.descCols && map.descCols.length) ? map.descCols
+        : ('desc' in map ? [map.desc] : []);
+      const desc = cols.map(j => String(r[j] || '').trim()).filter(Boolean).join(' ') ||
         (('category' in map) ? r[map.category] : '') || 'Lançamento';
 
       if ('balance' in map) {
         const b = U.parseMoney(r[map.balance]);
-        if (b !== null) { lastBalance = b; lastBalanceDate = date; }
+        // Extratos costumam vir do mais novo para o mais antigo, e há
+        // vários lançamentos por dia. O saldo que vale é o da primeira
+        // linha da data mais recente — daí o ">" estrito, que não deixa
+        // uma linha posterior do mesmo dia sobrescrever.
+        if (b !== null && (lastBalanceDate === null || date > lastBalanceDate)) {
+          lastBalance = b; lastBalanceDate = date;
+        }
       }
 
       records.push({
@@ -379,7 +410,8 @@
       warnings.push('As colunas foram encontradas, mas nenhuma linha virou lançamento válido.');
     }
 
-    const inst = RULES.detectInstitution(filename + ' ' + text.slice(0, 3000), null);
+    const inst = RULES.detectInstitution(filename + ' ' + text.slice(0, 3000), null) ||
+      RULES.detectInstitutionByLayout(text);
     const isCard = RULES.looksLikeCardFile(text.slice(0, 6000), filename);
 
     // Fatura de cartão em CSV costuma listar valores positivos para
@@ -421,7 +453,9 @@
         acctType: isCard ? 'creditcard' : 'checking',
         currency: 'BRL',
         periodStart: dates[0], periodEnd: dates[dates.length - 1],
-        balanceCents: lastBalance, balanceDate: lastBalanceDate,
+        balanceCents: saldoDeclarado !== null ? saldoDeclarado : lastBalance,
+        balanceDate: saldoDeclarado !== null
+          ? (dates[dates.length - 1] || lastBalanceDate) : lastBalanceDate,
         records
       }] : [],
       warnings
